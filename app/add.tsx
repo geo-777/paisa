@@ -19,6 +19,7 @@ import { categories, defaultCategoryForTime, type Category } from '@/src/lib/cat
 import { sanitizeAmountInput } from '@/src/lib/amountInput';
 import { formatDateKey, todayDateKey } from '@/src/lib/dates';
 import { useExpensesStore } from '@/src/store/useExpenses';
+import { requestSync } from '@/src/sync/queue';
 import { colors, radius, screenPadding, space } from '@/src/theme/tokens';
 
 export default function AddExpenseScreen() {
@@ -49,6 +50,7 @@ export default function AddExpenseScreen() {
       date: selectedDate ?? todayDateKey(),
       ...(note.trim() ? { note: note.trim() } : {}),
     });
+    void requestSync();
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.back();
   };

@@ -2,7 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import NetInfo from '@react-native-community/netinfo';
 import { addDays, format, parse, startOfDay } from 'date-fns';
-import { Link, useFocusEffect } from 'expo-router';
+import { Link, useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,6 +13,7 @@ import { formatDateKey } from '@/src/lib/dates';
 import { formatINR, formatPercent } from '@/src/lib/format';
 import { useExpensesStore, useTodayEntries, type Entry } from '@/src/store/useExpenses';
 import { colors, radius, screenPadding, space } from '@/src/theme/tokens';
+import { requestSync } from '@/src/sync/queue';
 
 export default function HomeScreen() {
   const [todayKey, setTodayKey] = useState(formatDateKey(new Date()));
@@ -66,6 +67,7 @@ export default function HomeScreen() {
     <EntryRow entry={item} onDelete={() => {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       deleteEntry(item.id);
+      void requestSync();
     }} />
   );
 
@@ -77,6 +79,11 @@ export default function HomeScreen() {
           <Text style={styles.date}>{format(parse(todayKey, 'yyyy-MM-dd', new Date()), 'EEEE, MMM d')}</Text>
           {isOffline && <Text style={styles.offlineText}>offline · saved on this device</Text>}
         </View>
+        <Link href={'/settings' as Href} asChild>
+          <Pressable accessibilityRole="button" accessibilityLabel="Settings" style={styles.settingsButton}>
+            <Feather name="settings" size={20} color={colors.textMuted} />
+          </Pressable>
+        </Link>
       </View>
 
       <View style={styles.summary}>
@@ -189,7 +196,8 @@ function EntryRow({ entry, onDelete }: { entry: Entry; onDelete: () => void }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   listContent: { paddingHorizontal: screenPadding, paddingBottom: space.xxl },
-  topLine: { paddingTop: space.lg, paddingBottom: space.xl },
+  topLine: { paddingTop: space.lg, paddingBottom: space.xl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  settingsButton: { width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
   eyebrow: { color: colors.textMuted, fontFamily: 'Inter_500Medium', fontSize: 12, letterSpacing: 0.8 },
   date: { color: colors.text, fontFamily: 'Inter_500Medium', fontSize: 16, marginTop: space.xs },
   offlineText: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: space.xs },

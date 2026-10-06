@@ -1,10 +1,30 @@
-import { categoryTotalsForDate, percentDirection, todayVsAverage, totalForDate, type ExpenseForCalc } from '../src/lib/calc';
+import {
+  avgDaily,
+  categoryShares,
+  categoryTotalsForDate,
+  caution,
+  dashboardStats,
+  monthOverMonth,
+  percentDirection,
+  todayVsAverage,
+  totalForDate,
+  type ExpenseForCalc,
+} from '../src/lib/calc';
+import { dashboardLogFixtures, type LogRow } from './fixtures/dashboardLogs';
 
 const entry = (date: string, amount: number, category: ExpenseForCalc['category'] = 'Breakfast'): ExpenseForCalc => ({
   date,
   amount,
   category,
 });
+
+function expensesFromLog(rows: LogRow[]): ExpenseForCalc[] {
+  return rows.map(([, date, , category, amount]) => ({
+    date,
+    amount,
+    category: category as ExpenseForCalc['category'],
+  }));
+}
 
 describe('Home calculations', () => {
   it('totals today only and returns all five categories', () => {
@@ -38,5 +58,42 @@ describe('Home calculations', () => {
     expect(percentDirection(0.9)).toBe('neutral');
     expect(percentDirection(1)).toBe('up');
     expect(percentDirection(-1)).toBe('down');
+  });
+
+  it('matches the October Log hand calculation, comparing only Sep 1–6', () => {
+    const expenses = expensesFromLog(dashboardLogFixtures.octoberWithBaseline);
+    const stats = dashboardStats(expenses, '2024-10-06');
+
+    expect(stats).not.toBeNull();
+    expect(stats?.monthTotal).toBe(800);
+    expect(stats?.avgDaily).toBeCloseTo(800 / 6);
+    expect(stats?.monthOverMonth).toBeCloseTo((800 - 600) / 600 * 100);
+    expect(stats?.highestDay).toEqual({ date: '2024-10-06', total: 300 });
+    expect(stats?.categoryShares.map(({ percent }) => percent)).toEqual([37.5, 18.8, 12.5, 18.7, 12.5]);
+    expect(stats?.categoryShares.reduce((total, share) => total + share.percent, 0)).toBe(100);
+    expect(stats?.caution).toEqual({ active: true, reason: 'today', pct: 200 });
+    expect(stats?.dailyTotals).toHaveLength(31);
+  });
+
+  it('keeps first-week comparisons hidden when there is no previous-month baseline', () => {
+    const expenses = expensesFromLog(dashboardLogFixtures.firstWeekNoBaseline);
+    expect(monthOverMonth(expenses, '2024-11-02')).toBeNull();
+    expect(todayVsAverage(expenses, '2024-11-02')).toBeNull();
+    expect(avgDaily(expenses, '2024-11', '2024-11-02')).toBe(60);
+    expect(dashboardStats(expenses, '2024-11-02')?.monthOverMonth).toBeNull();
+  });
+
+  it('handles leap February and a zero same-days prior baseline without fake percentages', () => {
+    const expenses = expensesFromLog(dashboardLogFixtures.leapFebruaryZeroPrior);
+    const stats = dashboardStats(expenses, '2024-02-29');
+
+    expect(stats?.monthTotal).toBe(380);
+    expect(stats?.avgDaily).toBeCloseTo(380 / 29);
+    expect(stats?.monthOverMonth).toBeNull();
+    expect(stats?.dailyTotals).toHaveLength(29);
+    expect(stats?.highestDay).toEqual({ date: '2024-02-29', total: 180 });
+    expect(stats?.categoryShares.map(({ percent }) => percent)).toEqual([21, 31.6, 47.4, 0, 0]);
+    expect(categoryShares(expenses, '2024-02', 29).reduce((total, share) => total + share.percent, 0)).toBe(100);
+    expect(caution(expenses, '2024-02-29')).toEqual({ active: true, reason: 'today', pct: 2420 });
   });
 });
