@@ -1,9 +1,10 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 import * as Crypto from 'expo-crypto';
 
 import type { Category } from '@/src/lib/categories';
+import { persistStorage } from '@/src/lib/persistStorage';
 
 export type Entry = {
   id: string;
@@ -88,7 +89,7 @@ export const useExpensesStore = create<ExpensesState>()(
     }),
     {
       name: 'student-finance-expenses-v1',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => persistStorage),
       partialize: (state) => ({ entries: state.entries, deletedIds: state.deletedIds }),
       onRehydrateStorage: () => (_state, error) => {
         useExpensesStore.getState().finishHydration(Boolean(error));
@@ -101,5 +102,5 @@ export const selectEntriesForDate = (dateKey: string) => (state: ExpensesState):
   state.entries.filter((entry) => entry.date === dateKey);
 
 export function useTodayEntries(dateKey: string): Entry[] {
-  return useExpensesStore(selectEntriesForDate(dateKey));
+  return useExpensesStore(useShallow(selectEntriesForDate(dateKey)));
 }

@@ -2,8 +2,9 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { addDays, format, parse } from 'date-fns';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  BackHandler,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -21,19 +22,37 @@ import { formatDateKey, todayDateKey } from '@/src/lib/dates';
 import { useExpensesStore } from '@/src/store/useExpenses';
 import { requestSync } from '@/src/sync/queue';
 import { colors, radius, screenPadding, space } from '@/src/theme/tokens';
+import { useNetworkStatus } from '@/src/hooks/useNetworkStatus';
 
 export default function AddExpenseScreen() {
   const insets = useSafeAreaInsets();
+  const { isOffline } = useNetworkStatus();
   const [amountInput, setAmountInput] = useState('');
   const [category, setCategory] = useState<Category>(() => defaultCategoryForTime(new Date()));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [noteVisible, setNoteVisible] = useState(false);
   const [note, setNote] = useState('');
+  const [saveError, setSaveError] = useState<string | null>(null);
   const lastSaveAt = useRef(0);
+  const saving = useRef(false);
   const addEntry = useExpensesStore((state) => state.addEntry);
+  const hasHydrated = useExpensesStore((state) => state.hasHydrated);
+  const hydrationFailed = useExpensesStore((state) => state.hydrationFailed);
   const amount = Number(amountInput);
   const isValidAmount = Number.isFinite(amount) && amount > 0;
   const displayDate = selectedDate ?? todayDateKey();
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      router.back();
+      return true;
+    });
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydrated && !hydrationFailed) void useExpensesStore.persist.rehydrate();
+  }, [hasHydrated, hydrationFailed]);
 
   const shiftDate = (days: number) => {
     const target = formatDateKey(addDays(parse(displayDate, 'yyyy-MM-dd', new Date()), days));
@@ -42,18 +61,54 @@ export default function AddExpenseScreen() {
 
   const saveExpense = () => {
     const now = Date.now();
-    if (!isValidAmount || now - lastSaveAt.current < 500) return;
+    if (!isValidAmount || saving.current || now - lastSaveAt.current < 500) return;
     lastSaveAt.current = now;
-    addEntry({
-      amount,
-      category,
-      date: selectedDate ?? todayDateKey(),
-      ...(note.trim() ? { note: note.trim() } : {}),
-    });
-    void requestSync();
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.back();
+    saving.current = true;
+    try {
+      addEntry({
+        amount,
+        category,
+        date: selectedDate ?? todayDateKey(),
+        ...(note.trim() ? { note: note.trim() } : {}),
+      });
+      setSaveError(null);
+      void requestSync();
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      router.back();
+    } catch (error) {
+      saving.current = false;
+      setSaveError(error instanceof Error ? error.message : 'Could not save this expense. Try again.');
+    }
   };
+
+  if (!hasHydrated || hydrationFailed) {
+    return (
+      <SafeAreaView style={styles.loadingSheet} edges={['top', 'bottom']}>
+        {!hydrationFailed ? (
+          <View style={styles.loadingContent} accessibilityLabel="Loading expenses before adding">
+            <View style={styles.loadingTitle} />
+            <View style={styles.loadingAmount} />
+            <View style={styles.loadingRow} />
+          </View>
+        ) : (
+          <View style={styles.loadingContent}>
+            <Text style={styles.saveError} accessibilityRole="alert">Your saved expenses could not be loaded.</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading expenses"
+              onPress={() => {
+                useExpensesStore.getState().setHydrationPending();
+                void useExpensesStore.persist.rehydrate();
+              }}
+              style={styles.retryButton}
+            >
+              <Text style={styles.retryText}>Retry</Text>
+            </Pressable>
+          </View>
+        )}
+      </SafeAreaView>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -73,6 +128,20 @@ export default function AddExpenseScreen() {
             <Feather name="x" size={22} color={colors.textMuted} />
           </Pressable>
         </View>
+
+        {isOffline && (
+          <Text style={styles.offlineNotice} accessibilityLiveRegion="polite">
+            Offline · this expense will save on your device and sync later.
+          </Text>
+        )}
+        {saveError && (
+          <View style={styles.saveErrorRow}>
+            <Text style={styles.saveError} accessibilityRole="alert">{saveError}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Retry saving expense" onPress={saveExpense} style={styles.retryButton}>
+              <Text style={styles.retryText}>Retry</Text>
+            </Pressable>
+          </View>
+        )}
 
         <ScrollView
           style={styles.formScroll}
@@ -197,6 +266,11 @@ export default function AddExpenseScreen() {
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay },
+  loadingSheet: { flex: 1, justifyContent: 'center', backgroundColor: colors.surface, padding: screenPadding },
+  loadingContent: { gap: space.lg },
+  loadingTitle: { height: 48, width: '55%', borderRadius: radius.sm, backgroundColor: colors.surfaceRaised },
+  loadingAmount: { height: 92, borderRadius: radius.md, backgroundColor: colors.surfaceRaised },
+  loadingRow: { height: 56, borderRadius: radius.md, backgroundColor: colors.surfaceRaised },
   sheet: {
     maxHeight: '94%',
     backgroundColor: colors.surface,
@@ -208,6 +282,11 @@ const styles = StyleSheet.create({
   },
   handle: { alignSelf: 'center', width: 40, height: space.xs, borderRadius: radius.pill, backgroundColor: colors.textFaint },
   sheetHeader: { minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: screenPadding },
+  offlineNotice: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 12, paddingHorizontal: screenPadding, paddingBottom: space.sm },
+  saveErrorRow: { paddingHorizontal: screenPadding, flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  saveError: { flex: 1, color: colors.up, fontFamily: 'Inter_400Regular', fontSize: 13 },
+  retryButton: { minHeight: 48, justifyContent: 'center', paddingHorizontal: space.md },
+  retryText: { color: colors.text, fontFamily: 'Inter_500Medium', fontSize: 14 },
   title: { color: colors.text, fontFamily: 'Inter_600SemiBold', fontSize: 22 },
   closeButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   formScroll: { flexShrink: 1 },

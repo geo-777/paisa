@@ -1,21 +1,29 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSessionStore } from '@/src/store/useSession';
+import { useNetworkStatus } from '@/src/hooks/useNetworkStatus';
 import { colors, radius, screenPadding, space } from '@/src/theme/tokens';
 
 export default function LoginScreen() {
   const isBusy = useSessionStore((state) => state.isBusy);
   const errorMessage = useSessionStore((state) => state.errorMessage);
   const signIn = useSessionStore((state) => state.signIn);
+  const { isOffline } = useNetworkStatus();
 
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.content}>
         <View style={styles.intro}>
-          <Text style={styles.title}>Student Finance</Text>
+          <Text style={styles.title}>Paisa</Text>
           <Text style={styles.description}>Sign in to save your expenses in your Google Sheet.</Text>
         </View>
+
+        {isOffline && (
+          <Text style={styles.offline} accessibilityLiveRegion="polite">
+            Offline · connect to the internet to sign in. Saved expenses stay on this device.
+          </Text>
+        )}
 
         {errorMessage && <Text accessibilityRole="alert" style={styles.error}>{errorMessage}</Text>}
 
@@ -27,7 +35,7 @@ export default function LoginScreen() {
           onPress={() => { void signIn(); }}
           style={[styles.googleButton, isBusy && styles.googleButtonBusy]}
         >
-          <Text style={styles.googleButtonText}>{isBusy ? 'Signing in…' : 'Continue with Google'}</Text>
+          {isBusy ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.googleButtonText}>{errorMessage ? 'Retry Google sign-in' : 'Continue with Google'}</Text>}
         </Pressable>
       </View>
     </SafeAreaView>
@@ -41,6 +49,7 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontFamily: 'Inter_600SemiBold', fontSize: 22 },
   description: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 24 },
   error: { color: colors.up, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20 },
+  offline: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20 },
   googleButton: { minHeight: 56, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: radius.pill },
   googleButtonBusy: { opacity: 0.65 },
   googleButtonText: { color: colors.onPrimary, fontFamily: 'Inter_600SemiBold', fontSize: 16 },

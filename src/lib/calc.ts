@@ -10,6 +10,8 @@ import {
 
 import { categories, type Category } from './categories';
 
+const DATE_REFERENCE = Date.UTC(2000, 0, 1);
+
 export type ExpenseForCalc = {
   date: string;
   amount: number;
@@ -18,7 +20,8 @@ export type ExpenseForCalc = {
 
 export type CategoryTotals = Record<Category, number>;
 export type PercentDirection = 'up' | 'down' | 'neutral';
-export type DailyTotal = { date: string; total: number };
+export type DailyTotal = { date: string; total: number; aboveThreshold?: boolean };
+export type DailyExpenseRow = { date: string; categories: CategoryTotals; total: number };
 export type CategoryShare = { category: Category; amount: number; percent: number };
 export type CautionResult = { active: boolean; reason: 'today' | 'week' | null; pct: number | null };
 export type DashboardStats = {
@@ -124,6 +127,12 @@ export function highestDay(entries: ExpenseForCalc[], monthKey: string, throughD
   return totals[0] ?? null;
 }
 
+export function lowestDay(entries: ExpenseForCalc[], monthKey: string, throughDay?: number): DailyTotal | null {
+  const totals = dailyTotalsForMonth(entries, monthKey, throughDay).filter((daily) => daily.total > 0);
+  totals.sort((a, b) => a.total - b.total || a.date.localeCompare(b.date));
+  return totals[0] ?? null;
+}
+
 export function dailyTotalsForMonth(entries: ExpenseForCalc[], monthKey: string, throughDay?: number): DailyTotal[] {
   const monthDate = parseMonthKey(monthKey);
   if (!monthDate) return [];
@@ -165,6 +174,37 @@ export function categoryShares(entries: ExpenseForCalc[], monthKey: string, thro
   return tenths.map(({ category, amount, tenths: shareTenths }) => ({ category, amount, percent: shareTenths / 10 }));
 }
 
+export function dailyExpenseRows(entries: ExpenseForCalc[], monthKey: string, throughDay?: number): DailyExpenseRow[] {
+  const monthDate = parseMonthKey(monthKey);
+  if (!monthDate) return [];
+  const dayCount = Math.min(throughDay ?? getDaysInMonth(monthDate), getDaysInMonth(monthDate));
+  const totalsByDate = new Map<string, CategoryTotals>();
+  for (const entry of entriesForMonth(entries, monthKey)) {
+    if (!isCategory(entry.category)) continue;
+    const day = Number(entry.date.slice(8, 10));
+    if (day > dayCount) continue;
+    const totals = totalsByDate.get(entry.date) ?? emptyCategoryTotals();
+    totals[entry.category] += validAmount(entry.amount);
+    totalsByDate.set(entry.date, totals);
+  }
+  return Array.from({ length: dayCount }, (_, index) => {
+    const date = format(addDays(monthDate, index), 'yyyy-MM-dd');
+    const categoryTotals = totalsByDate.get(date) ?? emptyCategoryTotals();
+    const total = categories.reduce((sum, category) => sum + categoryTotals[category], 0);
+    return { date, categories: categoryTotals, total };
+  });
+}
+
+export function firstDataMonth(entries: ExpenseForCalc[], currentMonthKey: string): string {
+  const validMonths = entries
+    .map((entry) => parseDateKey(entry.date))
+    .filter((date): date is Date => date !== null)
+    .map((date) => format(date, 'yyyy-MM'))
+    .filter((monthKey) => monthKey <= currentMonthKey)
+    .sort();
+  return validMonths[0] ?? currentMonthKey;
+}
+
 export function caution(entries: ExpenseForCalc[], todayKey: string): CautionResult {
   const today = parseDateKey(todayKey);
   if (!today) return { active: false, reason: null, pct: null };
@@ -196,16 +236,20 @@ export function dashboardStats(entries: ExpenseForCalc[], todayKey: string): Das
   if (!today) return null;
   const monthKey = format(today, 'yyyy-MM');
   const previousMonthName = format(subMonths(today, 1), 'MMMM');
+  const average = avgDaily(entries, monthKey, todayKey);
   return {
     monthKey,
     monthTotal: monthTotal(entries, monthKey, today.getDate()),
     daysElapsed: today.getDate(),
-    avgDaily: avgDaily(entries, monthKey, todayKey),
+    avgDaily: average,
     monthOverMonth: monthOverMonth(entries, todayKey),
     previousMonthName,
     highestDay: highestDay(entries, monthKey, today.getDate()),
     categoryShares: categoryShares(entries, monthKey, today.getDate()),
-    dailyTotals: dailyTotalsForMonth(entries, monthKey),
+    dailyTotals: dailyTotalsForMonth(entries, monthKey).map((daily) => ({
+      ...daily,
+      aboveThreshold: average > 0 && daily.total > average * 1.5,
+    })),
     caution: caution(entries, todayKey),
   };
 }
@@ -238,13 +282,13 @@ function emptyCategoryTotals(): CategoryTotals {
 }
 
 function parseDateKey(dateKey: string): Date | null {
-  const parsedDate = parse(dateKey, 'yyyy-MM-dd', new Date());
+  const parsedDate = parse(dateKey, 'yyyy-MM-dd', DATE_REFERENCE);
   return isValid(parsedDate) && format(parsedDate, 'yyyy-MM-dd') === dateKey ? parsedDate : null;
 }
 
 function parseMonthKey(monthKey: string): Date | null {
   if (!/^\d{4}-\d{2}$/.test(monthKey)) return null;
-  const parsedDate = parse(`${monthKey}-01`, 'yyyy-MM-dd', new Date());
+  const parsedDate = parse(`${monthKey}-01`, 'yyyy-MM-dd', DATE_REFERENCE);
   return isValid(parsedDate) && format(parsedDate, 'yyyy-MM') === monthKey ? parsedDate : null;
 }
 

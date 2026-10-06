@@ -7,7 +7,7 @@ import { useExpensesStore } from '@/src/store/useExpenses';
 import { useSessionStore } from '@/src/store/useSession';
 import { ensureMonthTab } from '@/src/sheets/monthTab';
 import { deleteLogRowById, appendLogRows, getValues } from '@/src/sheets/sheetsApi';
-import { SpreadsheetMissing } from '@/src/sheets/errors';
+import { AuthError, SpreadsheetMissing } from '@/src/sheets/errors';
 
 export type SyncAdapter = {
   isOnline: () => boolean;
@@ -23,6 +23,7 @@ export type SyncAdapter = {
   clearDeleted: (id: string) => void;
   mergeRemote: (entries: Entry[]) => void;
   setStatus: (status: 'synced' | 'syncing' | 'offline' | 'failed', error?: string | null) => void;
+  onAuthRevoked?: () => void;
 };
 
 const MAX_ATTEMPTS = 5;
@@ -77,6 +78,10 @@ export function createSyncQueue(adapter: SyncAdapter, delay: (attempt: number) =
         adapter.markSynced(ids);
         return;
       } catch (error) {
+        if (error instanceof AuthError) {
+          adapter.onAuthRevoked?.();
+          throw error;
+        }
         if (!adapter.isOnline()) { adapter.setStatus('offline'); return; }
         try {
           const rows = await withRecovery((id) => adapter.readIds(id));
@@ -94,6 +99,10 @@ export function createSyncQueue(adapter: SyncAdapter, delay: (attempt: number) =
           ordered.splice(0, ordered.length, ...missing);
           reconcileBeforeAppend = true;
         } catch (reconcileError) {
+          if (reconcileError instanceof AuthError) {
+            adapter.onAuthRevoked?.();
+            throw reconcileError;
+          }
           if (!adapter.isOnline()) { adapter.setStatus('offline'); return; }
           reconcileBeforeAppend = true;
           if (attempt === MAX_ATTEMPTS - 1) {
@@ -128,6 +137,10 @@ export function createSyncQueue(adapter: SyncAdapter, delay: (attempt: number) =
           deleted = true;
           break;
         } catch (error) {
+          if (error instanceof AuthError) {
+            adapter.onAuthRevoked?.();
+            throw error;
+          }
           if (!adapter.isOnline()) { adapter.setStatus('offline'); return; }
           if (attempt === MAX_ATTEMPTS - 1) {
             adapter.setStatus('failed', error instanceof Error ? error.message : 'Could not sync deletion.');
@@ -142,6 +155,10 @@ export function createSyncQueue(adapter: SyncAdapter, delay: (attempt: number) =
     if (pullRequested) {
       pullRequested = false;
       try { await pullRemote(); } catch (error) {
+        if (error instanceof AuthError) {
+          adapter.onAuthRevoked?.();
+          throw error;
+        }
         adapter.setStatus('failed', error instanceof Error ? error.message : 'Could not refresh expenses.');
         return;
       }
@@ -200,6 +217,7 @@ const queue = createSyncQueue({
   clearDeleted: (id) => useExpensesStore.getState().clearDeletedId(id),
   mergeRemote: (entries) => useExpensesStore.getState().mergeRemoteEntries(entries),
   setStatus: (status, error) => useExpensesStore.getState().setSyncStatus(status, error),
+  onAuthRevoked: () => useSessionStore.getState().handleAuthRevoked(),
 });
 
 export function requestSync(options: { pull?: boolean } = {}): Promise<void> {

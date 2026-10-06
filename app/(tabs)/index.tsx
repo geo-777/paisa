@@ -1,6 +1,5 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import NetInfo from '@react-native-community/netinfo';
 import { addDays, format, parse, startOfDay } from 'date-fns';
 import { Link, useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -14,10 +13,11 @@ import { formatINR, formatPercent } from '@/src/lib/format';
 import { useExpensesStore, useTodayEntries, type Entry } from '@/src/store/useExpenses';
 import { colors, radius, screenPadding, space } from '@/src/theme/tokens';
 import { requestSync } from '@/src/sync/queue';
+import { useNetworkStatus } from '@/src/hooks/useNetworkStatus';
 
 export default function HomeScreen() {
   const [todayKey, setTodayKey] = useState(formatDateKey(new Date()));
-  const [isOffline, setIsOffline] = useState(false);
+  const { isOffline } = useNetworkStatus();
   const entries = useExpensesStore((state) => state.entries);
   const todayEntries = useTodayEntries(todayKey);
   const hasHydrated = useExpensesStore((state) => state.hasHydrated);
@@ -47,10 +47,6 @@ export default function HomeScreen() {
       subscription.remove();
     };
   }, []);
-
-  useEffect(() => NetInfo.addEventListener((state) => {
-    setIsOffline(state.isConnected === false);
-  }), []);
 
   useFocusEffect(
     useCallback(() => {
@@ -167,7 +163,7 @@ function CategoryAmount({ category, amount }: { category: Category; amount: numb
   return (
     <View style={styles.categoryAmount}>
       <Text style={styles.categoryName} numberOfLines={1}>{category}</Text>
-      <Text style={styles.categoryValue} numberOfLines={1}>{formatINR(amount)}</Text>
+      <Text style={styles.categoryValue} numberOfLines={1} adjustsFontSizeToFit>{formatINR(amount)}</Text>
     </View>
   );
 }
@@ -179,7 +175,7 @@ function EntryRow({ entry, onDelete }: { entry: Entry; onDelete: () => void }) {
         <Text style={styles.entryCategory}>{entry.category}</Text>
         <Text style={styles.entryTime}>{format(new Date(entry.ts), 'h:mm a')}</Text>
       </View>
-      <Text style={styles.entryAmount}>{formatINR(entry.amount)}</Text>
+      <Text style={styles.entryAmount} numberOfLines={1} adjustsFontSizeToFit>{formatINR(entry.amount)}</Text>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Delete ${entry.category} expense for ${formatINR(entry.amount)}`}
@@ -197,7 +193,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   listContent: { paddingHorizontal: screenPadding, paddingBottom: space.xxl },
   topLine: { paddingTop: space.lg, paddingBottom: space.xl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  settingsButton: { width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  settingsButton: { width: 48, height: 48, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
   eyebrow: { color: colors.textMuted, fontFamily: 'Inter_500Medium', fontSize: 12, letterSpacing: 0.8 },
   date: { color: colors.text, fontFamily: 'Inter_500Medium', fontSize: 16, marginTop: space.xs },
   offlineText: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: space.xs },

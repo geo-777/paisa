@@ -4,6 +4,11 @@ import {
   categoryTotalsForDate,
   caution,
   dashboardStats,
+  dailyExpenseRows,
+  daysElapsed,
+  firstDataMonth,
+  highestDay,
+  lowestDay,
   monthOverMonth,
   percentDirection,
   todayVsAverage,
@@ -95,5 +100,62 @@ describe('Home calculations', () => {
     expect(stats?.categoryShares.map(({ percent }) => percent)).toEqual([21, 31.6, 47.4, 0, 0]);
     expect(categoryShares(expenses, '2024-02', 29).reduce((total, share) => total + share.percent, 0)).toBe(100);
     expect(caution(expenses, '2024-02-29')).toEqual({ active: true, reason: 'today', pct: 2420 });
+  });
+
+  it('returns zero-valued empty month stats and no day extrema or comparison', () => {
+    expect(daysElapsed('2024-10', '2024-10-01')).toBe(1);
+    expect(dashboardStats([], '2024-10-01')).toMatchObject({
+      monthTotal: 0,
+      avgDaily: 0,
+      monthOverMonth: null,
+      highestDay: null,
+      caution: { active: false, reason: null, pct: null },
+    });
+  });
+
+  it('uses full month totals when comparing a past month and counts leap days locally', () => {
+    const expenses = [entry('2024-01-10', 50), entry('2024-02-01', 40), entry('2024-02-29', 60)];
+    expect(daysElapsed('2024-02', '2024-03-01')).toBe(29);
+    expect(monthOverMonth(expenses, '2024-03-01', '2024-02')).toBe(100);
+  });
+
+  it('bounds month selection at the earliest stored entry month and builds zero-filled daily rows', () => {
+    const expenses = expensesFromLog(dashboardLogFixtures.octoberWithBaseline);
+    expect(firstDataMonth(expenses, '2024-10')).toBe('2024-09');
+    expect(firstDataMonth([], '2024-10')).toBe('2024-10');
+    const rows = dailyExpenseRows(expenses, '2024-10', 6);
+    expect(rows).toHaveLength(6);
+    expect(rows[0]).toMatchObject({ date: '2024-10-01', total: 100 });
+    expect(rows[5]).toMatchObject({ date: '2024-10-06', total: 300 });
+    expect(rows[2]?.categories.Dinner).toBe(100);
+  });
+
+  it('uses earliest date for ties and ignores zero-spend days for the lowest day', () => {
+    const expenses = [
+      entry('2024-10-02', 40),
+      entry('2024-10-04', 40),
+      entry('2024-10-05', 15),
+      entry('2024-10-06', 15),
+    ];
+    expect(highestDay(expenses, '2024-10')).toEqual({ date: '2024-10-02', total: 40 });
+    expect(lowestDay(expenses, '2024-10')).toEqual({ date: '2024-10-05', total: 15 });
+    expect(lowestDay([], '2024-10')).toBeNull();
+  });
+
+  it('does not trigger caution at exactly 1.5×, below the rupee floor, or below the weekly threshold', () => {
+    const baseline = [entry('2024-10-01', 100), entry('2024-10-02', 100), entry('2024-10-03', 100)];
+    expect(caution([...baseline, entry('2024-10-04', 150)], '2024-10-04').active).toBe(false);
+    expect(caution([...baseline, entry('2024-10-04', 151)], '2024-10-04')).toEqual({ active: true, reason: 'today', pct: 51 });
+    expect(caution([entry('2024-10-01', 20), entry('2024-10-02', 20), entry('2024-10-03', 20), entry('2024-10-04', 99)], '2024-10-04').active).toBe(false);
+  });
+
+  it('triggers the weekly caution only when the last seven days exceed the prior seven by more than 25%', () => {
+    const entries = [
+      entry('2024-10-02', 20), entry('2024-10-03', 20), entry('2024-10-04', 20),
+      entry('2024-10-05', 20), entry('2024-10-06', 20),
+      entry('2024-10-09', 25), entry('2024-10-10', 25), entry('2024-10-11', 25),
+      entry('2024-10-12', 25), entry('2024-10-13', 25), entry('2024-10-14', 25),
+    ];
+    expect(caution(entries, '2024-10-15')).toEqual({ active: true, reason: 'week', pct: 50 });
   });
 });

@@ -13,7 +13,7 @@ jest.mock('@react-native-google-signin/google-signin', () => ({
 
 import { createSyncQueue, type SyncAdapter } from '../src/sync/queue';
 import type { Entry } from '../src/store/useExpenses';
-import { SpreadsheetMissing } from '../src/sheets/errors';
+import { AuthError, SpreadsheetMissing } from '../src/sheets/errors';
 
 const rowFor = (entry: Entry) => [entry.id, entry.date, entry.ts, entry.category, entry.amount, entry.note ?? ''];
 
@@ -124,5 +124,20 @@ describe('sync queue', () => {
 
     expect(adapter.recoverSpreadsheet).toHaveBeenCalledWith('sheet-1');
     expect(adapter.append).toHaveBeenCalledWith('sheet-2', [rowFor(entry('recover-id', '2026-10-06T08:00:00.000Z'))]);
+  });
+
+  it('returns to signed out on a revoked token without discarding local entries', async () => {
+    const localEntry = entry('pending-auth', '2026-10-06T08:00:00.000Z');
+    const { adapter, queue } = setup({ entries: [localEntry] });
+    const onAuthRevoked = jest.fn();
+    adapter.onAuthRevoked = onAuthRevoked;
+    jest.mocked(adapter.append).mockRejectedValueOnce(new AuthError('Token revoked', 401, ''));
+
+    await queue.flush();
+
+    expect(onAuthRevoked).toHaveBeenCalledTimes(1);
+    expect(adapter.markSynced).not.toHaveBeenCalled();
+    expect(adapter.markFailed).not.toHaveBeenCalled();
+    expect(adapter.load().entries).toEqual([localEntry]);
   });
 });

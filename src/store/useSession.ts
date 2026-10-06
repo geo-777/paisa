@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -12,6 +11,7 @@ import {
 import { messageFromError } from '@/src/sheets/errors';
 import { discoverSpreadsheet } from '@/src/sheets/discover';
 import { requestSync } from '@/src/sync/queue';
+import { persistStorage } from '@/src/lib/persistStorage';
 
 export type SessionStatus = 'checking' | 'signedOut' | 'signedIn';
 
@@ -24,6 +24,7 @@ type SessionState = {
   bootstrapSession: () => Promise<void>;
   signIn: () => Promise<boolean>;
   signOut: () => Promise<void>;
+  handleAuthRevoked: () => void;
 };
 
 async function discoverForUser(user: GoogleUser): Promise<void> {
@@ -89,10 +90,16 @@ export const useSessionStore = create<SessionState>()(
           set({ status: 'signedOut', user: null, isBusy: false, errorMessage: messageFromError(error) });
         }
       },
+      handleAuthRevoked: () => set({
+        status: 'signedOut',
+        user: null,
+        isBusy: false,
+        errorMessage: 'Your Google session expired. Sign in again to sync saved changes.',
+      }),
     }),
     {
       name: 'student-finance-session-v1',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => persistStorage),
       partialize: (state) => ({ spreadsheetId: state.spreadsheetId }),
     },
   ),

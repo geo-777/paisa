@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Student Finance",
-    "slug": "student-finance",
+    "name": "Paisa",
+    "slug": "paisa",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "studentfinance",
+    "scheme": "paisa",
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/images/splash-icon.png",
@@ -16,6 +16,8 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.geo.paisa",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#0B0B0D",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
