@@ -1,106 +1,91 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import {
-  configureGoogleSignIn,
-  signInSilently,
-  signInWithGoogle,
-  signOutFromGoogle,
-  type GoogleUser,
-} from '@/src/auth/googleAuth';
-import { messageFromError } from '@/src/sheets/errors';
-import { discoverSpreadsheet } from '@/src/sheets/discover';
 import { requestSync } from '@/src/sync/queue';
 import { persistStorage } from '@/src/lib/persistStorage';
+import { supabase } from '@/src/data/supabase';
+import { useExpensesStore } from '@/src/store/useExpenses';
 
 export type SessionStatus = 'checking' | 'signedOut' | 'signedIn';
-
+type SessionUser = { id: string; email: string };
 type SessionState = {
   status: SessionStatus;
   isBusy: boolean;
-  user: GoogleUser | null;
-  spreadsheetId: string | null;
+  user: SessionUser | null;
   errorMessage: string | null;
   bootstrapSession: () => Promise<void>;
-  signIn: () => Promise<boolean>;
+  signIn: (email: string, password: string, createAccount: boolean) => Promise<boolean>;
   signOut: () => Promise<void>;
-  handleAuthRevoked: () => void;
 };
 
-async function discoverForUser(user: GoogleUser): Promise<void> {
-  const result = await discoverSpreadsheet(
-    useSessionStore.getState().spreadsheetId,
-    () => useSessionStore.setState({ spreadsheetId: null }),
-  );
-  useSessionStore.setState({
-    status: 'signedIn',
-    isBusy: false,
-    user,
-    spreadsheetId: result.spreadsheetId,
-    errorMessage: null,
-  });
-  void requestSync({ pull: true });
+function authMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : 'Authentication failed. Try again.';
+  if (/invalid login credentials/i.test(message)) return 'Email or password is incorrect.';
+  if (/already registered|user already exists/i.test(message)) return 'An account with this email already exists. Sign in instead.';
+  if (/password.*(6|short|weak)/i.test(message)) return 'Use a password with at least 6 characters.';
+  if (/network|fetch/i.test(message)) return 'Could not connect. Check your internet connection and try again.';
+  return message;
 }
 
-export const useSessionStore = create<SessionState>()(
-  persist(
-    (set) => ({
-      status: 'checking',
-      isBusy: false,
-      user: null,
-      spreadsheetId: null,
-      errorMessage: null,
-      bootstrapSession: async () => {
-        set({ status: 'checking', errorMessage: null });
-        try {
-          await useSessionStore.persist.rehydrate();
-          configureGoogleSignIn();
-          const user = await signInSilently();
-          if (!user) {
-            set({ status: 'signedOut', user: null, isBusy: false });
-            return;
-          }
-          await discoverForUser(user);
-        } catch (error) {
-          set({ status: 'signedOut', user: null, isBusy: false, errorMessage: messageFromError(error) });
-        }
-      },
-      signIn: async () => {
-        set({ isBusy: true, errorMessage: null });
-        try {
-          configureGoogleSignIn();
-          const user = await signInWithGoogle();
-          if (!user) {
-            set({ status: 'signedOut', isBusy: false });
-            return false;
-          }
-          await discoverForUser(user);
-          return true;
-        } catch (error) {
-          set({ status: 'signedOut', user: null, isBusy: false, errorMessage: messageFromError(error) });
-          return false;
-        }
-      },
-      signOut: async () => {
-        set({ isBusy: true, errorMessage: null });
-        try {
-          await signOutFromGoogle();
-          set({ status: 'signedOut', user: null, isBusy: false });
-        } catch (error) {
-          set({ status: 'signedOut', user: null, isBusy: false, errorMessage: messageFromError(error) });
-        }
-      },
-      handleAuthRevoked: () => set({
-        status: 'signedOut',
-        user: null,
+export const useSessionStore = create<SessionState>()(persist((set) => ({
+  status: 'checking',
+  isBusy: false,
+  user: null,
+  errorMessage: null,
+  bootstrapSession: async () => {
+    set({ status: 'checking', errorMessage: null });
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      set({ status: 'signedOut', user: null, errorMessage: authMessage(error) });
+      return;
+    }
+    const session = data.session;
+    useExpensesStore.getState().activateUser(session?.user.id ?? null);
+    set({ status: session ? 'signedIn' : 'signedOut', user: session?.user.email ? { id: session.user.id, email: session.user.email } : null });
+    if (session) void requestSync({ pull: true });
+    supabase.auth.onAuthStateChange((event, nextSession) => {
+      useExpensesStore.getState().activateUser(nextSession?.user.id ?? null);
+      set({
+        status: nextSession ? 'signedIn' : 'signedOut',
+        user: nextSession?.user.email ? { id: nextSession.user.id, email: nextSession.user.email } : null,
         isBusy: false,
-        errorMessage: 'Your Google session expired. Sign in again to sync saved changes.',
-      }),
-    }),
-    {
-      name: 'student-finance-session-v1',
-      storage: createJSONStorage(() => persistStorage),
-      partialize: (state) => ({ spreadsheetId: state.spreadsheetId }),
-    },
-  ),
-);
+      });
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        setTimeout(() => { void requestSync({ pull: true }); }, 0);
+      }
+    });
+  },
+  signIn: async (email, password, createAccount) => {
+    set({ isBusy: true, errorMessage: null });
+    try {
+      const result = createAccount
+        ? await supabase.auth.signUp({ email: email.trim(), password })
+        : await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (result.error) throw result.error;
+      if (createAccount && !result.data.session) {
+        useExpensesStore.getState().activateUser(null);
+        set({ isBusy: false, errorMessage: 'Check your email to confirm your account, then sign in.' });
+        return false;
+      }
+      if (result.data.user) useExpensesStore.getState().activateUser(result.data.user.id);
+      set({ status: 'signedIn', isBusy: false, user: result.data.user?.email ? { id: result.data.user.id, email: result.data.user.email } : null });
+      void requestSync({ pull: true });
+      return true;
+    } catch (error) {
+      set({ isBusy: false, errorMessage: authMessage(error) });
+      return false;
+    }
+  },
+  signOut: async () => {
+    set({ isBusy: true, errorMessage: null });
+    const { error } = await supabase.auth.signOut();
+    if (!error) useExpensesStore.getState().activateUser(null);
+    set(error
+      ? { isBusy: false, errorMessage: authMessage(error) }
+      : { status: 'signedOut', isBusy: false, user: null });
+  },
+}), {
+  name: 'student-finance-session-v2',
+  storage: createJSONStorage(() => persistStorage),
+  partialize: (state) => ({ user: state.user }),
+}));

@@ -173,7 +173,7 @@ function EntryRow({ entry, onDelete }: { entry: Entry; onDelete: () => void }) {
     <View style={styles.entryRow}>
       <View style={styles.entryInfo}>
         <Text style={styles.entryCategory}>{entry.category}</Text>
-        <Text style={styles.entryTime}>{format(new Date(entry.ts), 'h:mm a')}</Text>
+        <Text style={styles.entryTime}>{format(new Date(entry.createdAt), 'h:mm a')}</Text>
       </View>
       <Text style={styles.entryAmount} numberOfLines={1} adjustsFontSizeToFit>{formatINR(entry.amount)}</Text>
       <Pressable

@@ -21,6 +21,7 @@ import { formatINR } from '@/src/lib/format';
 import { useExpensesStore } from '@/src/store/useExpenses';
 import { colors, radius, screenPadding, space } from '@/src/theme/tokens';
 import { useNetworkStatus } from '@/src/hooks/useNetworkStatus';
+import { loadMonth } from '@/src/sync/queue';
 
 export default function AnalyticsScreen() {
   const [todayKey, setTodayKey] = useState(formatDateKey(new Date()));
@@ -84,6 +85,14 @@ export default function AnalyticsScreen() {
   }, [updateToday]);
 
   useFocusEffect(useCallback(() => { updateToday(); }, [updateToday]));
+
+  useEffect(() => {
+    if (isOffline) return;
+    const selectedDate = monthDate(selectedMonth);
+    void loadMonth(subMonths(selectedDate, 1), selectedDate).catch((error: unknown) => {
+      useExpensesStore.getState().setSyncStatus('failed', error instanceof Error ? error.message : 'Could not load this month.');
+    });
+  }, [isOffline, selectedMonth]);
 
   if (!hasHydrated) {
     return (

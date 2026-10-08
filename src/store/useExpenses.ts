@@ -9,7 +9,7 @@ import { persistStorage } from '@/src/lib/persistStorage';
 export type Entry = {
   id: string;
   date: string;
-  ts: string;
+  createdAt: string;
   category: Category;
   amount: number;
   note?: string;
@@ -21,11 +21,14 @@ export type NewEntry = Pick<Entry, 'date' | 'category' | 'amount'> & Pick<Entry,
 type ExpensesState = {
   entries: Entry[];
   deletedIds: string[];
+  activeUserId: string | null;
+  accounts: Record<string, { entries: Entry[]; deletedIds: string[] }>;
   syncStatus: 'synced' | 'syncing' | 'offline' | 'failed';
   syncError: string | null;
   hasHydrated: boolean;
   hydrationFailed: boolean;
   addEntry: (input: NewEntry) => Entry;
+  activateUser: (userId: string | null) => void;
   deleteEntry: (id: string) => void;
   markEntriesSynced: (ids: string[]) => void;
   markEntriesFailed: (ids: string[]) => void;
@@ -42,6 +45,8 @@ export const useExpensesStore = create<ExpensesState>()(
     (set) => ({
       entries: [],
       deletedIds: [],
+      activeUserId: null,
+      accounts: {},
       syncStatus: 'synced',
       syncError: null,
       hasHydrated: false,
@@ -50,12 +55,23 @@ export const useExpensesStore = create<ExpensesState>()(
         const entry: Entry = {
           ...input,
           id: Crypto.randomUUID(),
-          ts: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
           status: 'pending',
         };
         set((state) => ({ entries: [entry, ...state.entries] }));
         return entry;
       },
+      activateUser: (userId) => set((state) => {
+        const accounts = { ...state.accounts };
+        if (state.activeUserId) accounts[state.activeUserId] = { entries: state.entries, deletedIds: state.deletedIds };
+        const account = userId ? accounts[userId] : undefined;
+        return {
+          accounts,
+          activeUserId: userId,
+          entries: account?.entries ?? [],
+          deletedIds: account?.deletedIds ?? [],
+        };
+      }),
       deleteEntry: (id) => set((state) => ({
         entries: state.entries.filter((entry) => entry.id !== id),
         deletedIds: state.deletedIds.includes(id) ? state.deletedIds : [...state.deletedIds, id],
@@ -90,7 +106,7 @@ export const useExpensesStore = create<ExpensesState>()(
     {
       name: 'student-finance-expenses-v1',
       storage: createJSONStorage(() => persistStorage),
-      partialize: (state) => ({ entries: state.entries, deletedIds: state.deletedIds }),
+      partialize: (state) => ({ entries: state.entries, deletedIds: state.deletedIds, activeUserId: state.activeUserId, accounts: state.accounts }),
       onRehydrateStorage: () => (_state, error) => {
         useExpensesStore.getState().finishHydration(Boolean(error));
       },

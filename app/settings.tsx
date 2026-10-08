@@ -1,7 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useExpensesStore } from '@/src/store/useExpenses';
@@ -25,32 +24,13 @@ export default function SettingsScreen() {
   const deletedIds = useExpensesStore((state) => state.deletedIds);
   const retryFailed = useExpensesStore((state) => state.retryFailed);
   const user = useSessionStore((state) => state.user);
-  const spreadsheetId = useSessionStore((state) => state.spreadsheetId);
   const isSigningOut = useSessionStore((state) => state.isBusy);
   const signOut = useSessionStore((state) => state.signOut);
-  const [linking, setLinking] = useState(false);
-  const [linkError, setLinkError] = useState<string | null>(null);
   const pendingCount = entries.filter((entry) => entry.status === 'pending' || entry.status === 'failed').length + deletedIds.length;
 
   const retrySync = () => {
     retryFailed();
     void requestSync({ pull: true });
-  };
-
-  const openSpreadsheet = async () => {
-    if (!spreadsheetId) {
-      setLinkError('No spreadsheet is connected yet. Sign in again to reconnect.');
-      return;
-    }
-    setLinking(true);
-    setLinkError(null);
-    try {
-      await Linking.openURL(`https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/edit`);
-    } catch (openError) {
-      setLinkError(openError instanceof Error ? openError.message : 'Could not open Google Sheets. Try again.');
-    } finally {
-      setLinking(false);
-    }
   };
 
   const confirmSignOut = () => {
@@ -78,32 +58,11 @@ export default function SettingsScreen() {
         <View style={styles.accountRow}>
           <View style={styles.accountIcon}><Feather name="user" size={18} color={colors.textMuted} /></View>
           <View style={styles.accountText}>
-            <Text style={styles.accountName}>{user?.name || 'Google account'}</Text>
-            <Text style={styles.accountEmail}>{user?.email || 'No account is currently signed in.'}</Text>
+            <Text style={styles.accountName}>{user?.email || 'No account is currently signed in.'}</Text>
           </View>
         </View>
 
         {isOffline && <Text style={styles.offlineText}>Offline · local expenses remain available on this device.</Text>}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Open spreadsheet in Google Sheets"
-          accessibilityState={{ disabled: linking || !spreadsheetId }}
-          disabled={linking || !spreadsheetId}
-          onPress={() => { void openSpreadsheet(); }}
-          style={[styles.sheetButton, (!spreadsheetId || linking) && styles.disabledButton]}
-        >
-          {linking ? <ActivityIndicator color={colors.onPrimary} /> : <Feather name="external-link" size={18} color={colors.onPrimary} />}
-          <Text style={styles.sheetButtonText}>{linking ? 'Opening…' : 'Open Google Sheet'}</Text>
-        </Pressable>
-        {linkError && (
-          <View style={styles.errorRow}>
-            <Text style={styles.errorText} accessibilityRole="alert">{linkError}</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="Retry opening spreadsheet" onPress={() => { void openSpreadsheet(); }} style={styles.actionButton}>
-              <Text style={styles.actionText}>Retry</Text>
-            </Pressable>
-          </View>
-        )}
 
         <Text style={[styles.label, styles.syncLabel]}>SYNC</Text>
         <View style={styles.statusRow}>
@@ -126,7 +85,7 @@ export default function SettingsScreen() {
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Sign out of Google"
+          accessibilityLabel="Sign out"
           accessibilityState={{ disabled: isSigningOut }}
           disabled={isSigningOut}
           onPress={confirmSignOut}
@@ -152,8 +111,6 @@ const styles = StyleSheet.create({
   accountName: { color: colors.text, fontFamily: 'Inter_500Medium', fontSize: 15 },
   accountEmail: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 13 },
   offlineText: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19 },
-  sheetButton: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm, borderRadius: radius.pill, backgroundColor: colors.primary },
-  sheetButtonText: { color: colors.onPrimary, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
   disabledButton: { opacity: 0.55 },
   syncLabel: { marginTop: space.lg },
   statusRow: { minHeight: 48, borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: space.sm },
