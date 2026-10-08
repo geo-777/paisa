@@ -41,10 +41,10 @@ export default function RootLayout() {
     <>
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-        {sessionStatus === 'signedIn' ? (
-          <>
+        <Stack.Protected guard={sessionStatus === 'signedIn'}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="recently-deleted" options={{ presentation: 'modal' }} />
             <Stack.Screen
               name="add"
               options={{
@@ -53,10 +53,10 @@ export default function RootLayout() {
                 contentStyle: { backgroundColor: 'transparent' },
               }}
             />
-          </>
-        ) : (
+        </Stack.Protected>
+        <Stack.Protected guard={sessionStatus === 'signedOut'}>
           <Stack.Screen name="login" />
-        )}
+        </Stack.Protected>
       </Stack>
     </>
   );

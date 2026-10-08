@@ -20,7 +20,7 @@ Do not build budgets, goals, bank sync, receipts, multi-currency, income trackin
 
 ## Database
 
-Run `supabase/schema.sql` once in the Supabase SQL Editor. It defines the only v1 table, `public.expenses`, with UUID id, `user_id`, local calendar `date`, category (`breakfast`, `lunch`, `dinner`, `snacks`, `misc`), positive numeric amount, optional note and `created_at`. RLS must restrict all operations to the authenticated owner. No other tables in v1.
+`supabase/schema.sql` defines the only v1 table, `public.expenses`, with UUID id, `user_id`, local calendar `date`, category (`breakfast`, `lunch`, `dinner`, `snacks`, `misc`), positive numeric amount, optional note, `created_at` and nullable `deleted_at`. RLS restricts all operations to the authenticated owner. No other tables in v1.
 
 Expense dates are chosen on device as local `YYYY-MM-DD`; never derive a date with `toISOString()`.
 
@@ -29,7 +29,8 @@ Expense dates are chosen on device as local `YYYY-MM-DD`; never derive a date wi
 UI categories display capitalized names; database category values are lowercase. An entry contains `{ id, date, category, amount, note?, createdAt, status: 'synced' | 'pending' | 'failed' }`.
 
 - Add: generate a UUID on device; add immediately to the account-scoped local store as pending; upsert to Supabase with that ID. Mark synced only after success. Retry pending entries on app foreground and network reconnect.
-- Delete: remove locally immediately; queue the remote delete for retry while offline.
+- Delete: move the expense into the account-scoped Recently Deleted list immediately; queue a `deleted_at` update for retry while offline. Restore clears `deleted_at` and is also queued offline. Do not physically delete expense rows from the app.
+- Edit: update the existing row by ID in the local store and upsert it; preserve its ID and creation time.
 - Load only the date ranges a screen needs; never select all. Supabase may cap a response at 1000 rows per request, so paginate.
 - Home and Dashboard load from the first day of the previous month through today.
 - Analytics fetches the selected month and preceding month on selection change, then caches results.
@@ -49,7 +50,8 @@ For development, turn off **Confirm email** under Supabase Authentication → Pr
 - **Add Expense modal:** auto-focused numeric input; category chips; time-based default (before 11:00 Breakfast, 11:00–15:59 Lunch, 16:00–18:59 Snacks, 19:00+ Dinner; never default to Misc); date defaults to Today with a secondary change control; optional note behind a tap. Save disabled until amount > 0, light haptic, optimistic close, ignore duplicate taps within 500 ms. Digits and one decimal point, max 7 digits and 2 decimals.
 - **Dashboard:** this month total and same-days comparison; average/day, highest day; daily bar chart with today highlighted; category distribution; caution dot and one line only when caution triggers.
 - **Analytics:** bounded month selector; question “Where is my money going, and am I spending more than usual?”; daily table with five categories and total (tabular numbers, zero as `-`); category totals and shares; average/day, highest/lowest day; month-over-month comparison.
-- Tabs: Home, Dashboard, Analytics. Each screen handles loading, empty, offline and error-with-retry states.
+- **Monthly:** fourth tab with a month selector, multi-select category filters and the total for the selected categories. The full daily table shows date and total; expand a day to see its expense entries and edit or move them to Recently Deleted. Recently Deleted entries can be restored. Include loading, empty, offline and error-with-retry states.
+- Tabs: Home, Dashboard, Analytics, Monthly. Each screen handles loading, empty, offline and error-with-retry states.
 
 ## Calculation rules
 

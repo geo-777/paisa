@@ -6,6 +6,7 @@ import {
   dashboardStats,
   dailyExpenseRows,
   daysElapsed,
+  filteredMonthTotal,
   firstDataMonth,
   highestDay,
   lowestDay,
@@ -128,6 +129,20 @@ describe('Home calculations', () => {
     expect(rows[0]).toMatchObject({ date: '2024-10-01', total: 100 });
     expect(rows[5]).toMatchObject({ date: '2024-10-06', total: 300 });
     expect(rows[2]?.categories.Dinner).toBe(100);
+  });
+
+  it('totals one or several selected categories within the selected month and elapsed days', () => {
+    const expenses = [
+      entry('2024-10-01', 40, 'Breakfast'),
+      entry('2024-10-01', 70, 'Lunch'),
+      entry('2024-10-02', 90, 'Dinner'),
+      entry('2024-11-01', 500, 'Breakfast'),
+    ];
+    expect(filteredMonthTotal(expenses, '2024-10', ['Breakfast'])).toBe(40);
+    expect(filteredMonthTotal(expenses, '2024-10', ['Breakfast', 'Lunch'])).toBe(110);
+    expect(filteredMonthTotal(expenses, '2024-10', ['Breakfast', 'Lunch'], 1)).toBe(110);
+    expect(filteredMonthTotal(expenses, '2024-10', [])).toBe(0);
+    expect(dailyExpenseRows(expenses, '2024-10', 2, ['Breakfast', 'Lunch'])[1]?.total).toBe(0);
   });
 
   it('uses earliest date for ties and ignores zero-spend days for the lowest day', () => {

@@ -5,6 +5,7 @@ import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CategoryDistributionRow, DeltaPill } from '@/src/components/FinanceSummary';
+import { DailyExpenseTable } from '@/src/components/DailyExpenseTable';
 import {
   avgDaily,
   categoryShares,
@@ -217,54 +218,6 @@ function StatBlock({ label, value, caption }: { label: string; value: string; ca
   );
 }
 
-function DailyExpenseTable({ rows, monthKey }: { rows: ReturnType<typeof dailyExpenseRows>; monthKey: string }) {
-  return (
-    <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator>
-      <ScrollView
-        style={styles.tableVerticalScroll}
-        nestedScrollEnabled
-        stickyHeaderIndices={[0]}
-        showsVerticalScrollIndicator
-      >
-        <View style={styles.tableHeader}>
-          <TableCell value="Date" kind="date" header />
-          <TableCell value="Breakfast" header />
-          <TableCell value="Lunch" header />
-          <TableCell value="Dinner" header />
-          <TableCell value="Snacks" header />
-          <TableCell value="Misc" header />
-          <TableCell value="Total" kind="total" header />
-        </View>
-        {rows.map((row) => (
-          <View key={row.date} style={styles.tableRow}>
-            <TableCell value={format(parse(row.date, 'yyyy-MM-dd', monthDate(monthKey)), 'MMM d')} kind="date" />
-            <TableCell value={tableAmount(row.categories.Breakfast)} />
-            <TableCell value={tableAmount(row.categories.Lunch)} />
-            <TableCell value={tableAmount(row.categories.Dinner)} />
-            <TableCell value={tableAmount(row.categories.Snacks)} />
-            <TableCell value={tableAmount(row.categories.Misc)} />
-            <TableCell value={tableAmount(row.total)} kind="total" />
-          </View>
-        ))}
-      </ScrollView>
-    </ScrollView>
-  );
-}
-
-function TableCell({ value, kind, header = false }: { value: string; kind?: 'date' | 'total'; header?: boolean }) {
-  return (
-    <View style={[styles.tableCell, kind === 'date' && styles.dateCell, kind === 'total' && styles.totalCell, header && styles.headerCell]}>
-      <Text style={[styles.cellText, header && styles.headerText, (kind === 'date' || header) && styles.leftCellText, kind === 'total' && styles.totalText]}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function tableAmount(value: number): string {
-  return value === 0 ? '-' : formatINR(value);
-}
-
 function monthDate(monthKey: string): Date {
   const [year = '2000', month = '01'] = monthKey.split('-');
   return new Date(Number(year), Number(month) - 1, 1);
@@ -296,17 +249,6 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.text, fontFamily: 'Inter_500Medium', fontSize: 15 },
   sectionCaption: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 11, marginTop: -space.sm },
   sectionEmpty: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 13 },
-  tableVerticalScroll: { maxHeight: 400 },
-  tableHeader: { minHeight: 48, flexDirection: 'row', backgroundColor: colors.surfaceRaised, borderBottomWidth: 1, borderBottomColor: colors.border },
-  tableRow: { minHeight: 48, flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border },
-  tableCell: { width: 88, minHeight: 48, justifyContent: 'center', paddingHorizontal: space.xs, paddingVertical: space.xs, alignItems: 'flex-end' },
-  dateCell: { width: 64, alignItems: 'flex-start' },
-  totalCell: { width: 96, backgroundColor: colors.surfaceRaised },
-  headerCell: { alignItems: 'flex-start', paddingHorizontal: space.xs },
-  cellText: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 12, fontVariant: ['tabular-nums'], textAlign: 'right' },
-  leftCellText: { textAlign: 'left' },
-  headerText: { color: colors.text, fontFamily: 'Inter_500Medium', fontSize: 11 },
-  totalText: { color: colors.text, fontFamily: 'Inter_500Medium' },
   errorState: { flex: 1, padding: screenPadding, justifyContent: 'center', gap: space.md },
   body: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 15 },
   retryButton: { minHeight: 48, borderRadius: radius.pill, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', paddingHorizontal: space.lg, alignSelf: 'flex-start' },

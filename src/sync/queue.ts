@@ -2,7 +2,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { AppState } from 'react-native';
 import { endOfMonth, format, startOfMonth, subMonths } from 'date-fns';
 
-import { deleteExpense, fetchExpenses, upsertExpense } from '@/src/data/expensesApi';
+import { fetchDeletedExpenses, fetchExpenses, softDeleteExpense, upsertExpense } from '@/src/data/expensesApi';
 import { useExpensesStore } from '@/src/store/useExpenses';
 import { supabase } from '@/src/data/supabase';
 
@@ -42,13 +42,14 @@ async function flush(pull: boolean): Promise<void> {
   store.setSyncStatus('syncing');
   try {
     for (const id of store.deletedIds) {
-      await deleteExpense(id);
+      const deleted = useExpensesStore.getState().deletedEntries.find((entry) => entry.id === id);
+      await softDeleteExpense(id, deleted?.deletedAt ?? new Date().toISOString());
       useExpensesStore.getState().clearDeletedId(id);
     }
     const pending = useExpensesStore.getState().entries.filter((entry) => entry.status !== 'synced');
     for (const entry of pending) {
       await upsertExpense(entry);
-      useExpensesStore.getState().markEntriesSynced([entry.id]);
+      useExpensesStore.getState().markEntrySynced(entry);
     }
     if (pull) {
       const today = new Date();
@@ -79,4 +80,9 @@ export function startSyncListeners(): () => void {
 export async function loadMonth(fromDate: Date, toDate: Date): Promise<void> {
   const entries = await fetchExpenses(format(startOfMonth(fromDate), 'yyyy-MM-dd'), format(endOfMonth(toDate), 'yyyy-MM-dd'));
   useExpensesStore.getState().mergeRemoteEntries(entries);
+}
+
+export async function loadDeletedMonth(fromDate: Date, toDate: Date): Promise<void> {
+  const entries = await fetchDeletedExpenses(format(startOfMonth(fromDate), 'yyyy-MM-dd'), format(endOfMonth(toDate), 'yyyy-MM-dd'));
+  useExpensesStore.getState().mergeDeletedEntries(entries);
 }

@@ -28,7 +28,7 @@ Use mobile-ui and finance-calcs skills. Build the Dashboard per context using ca
 
 ## Phase 6: Analytics
 
-Use mobile-ui and finance-calcs skills. Build the month selector, daily table, category totals/shares and comparisons. Fetch selected and preceding month on month change; cache fetched data; prevent future month selection.
+Use mobile-ui and finance-calcs skills. Build Analytics summaries and the fourth Monthly tab. Monthly shows a month selector and the full daily category table, with totals per day and for the month. Fetch the selected month on change; cache results; prevent future month selection. Both screens handle loading, empty, offline and retry states.
 
 ## Phase 7: Polish and edge cases
 

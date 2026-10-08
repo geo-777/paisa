@@ -5,7 +5,8 @@ create table public.expenses (
   category   text not null check (category in ('breakfast','lunch','dinner','snacks','misc')),
   amount     numeric(10,2) not null check (amount > 0),
   note       text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
 create index expenses_user_date_idx on public.expenses (user_id, date);

@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { addDays, format, parse } from 'date-fns';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   BackHandler,
@@ -25,17 +25,20 @@ import { colors, radius, screenPadding, space } from '@/src/theme/tokens';
 import { useNetworkStatus } from '@/src/hooks/useNetworkStatus';
 
 export default function AddExpenseScreen() {
+  const { editId } = useLocalSearchParams<{ editId?: string }>();
   const insets = useSafeAreaInsets();
   const { isOffline } = useNetworkStatus();
-  const [amountInput, setAmountInput] = useState('');
-  const [category, setCategory] = useState<Category>(() => defaultCategoryForTime(new Date()));
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [noteVisible, setNoteVisible] = useState(false);
-  const [note, setNote] = useState('');
+  const editEntry = useExpensesStore((state) => state.entries.find((entry) => entry.id === editId));
+  const [amountInput, setAmountInput] = useState(() => editEntry ? String(editEntry.amount) : '');
+  const [category, setCategory] = useState<Category>(() => editEntry?.category ?? defaultCategoryForTime(new Date()));
+  const [selectedDate, setSelectedDate] = useState<string | null>(() => editEntry && editEntry.date !== todayDateKey() ? editEntry.date : null);
+  const [noteVisible, setNoteVisible] = useState(() => Boolean(editEntry?.note));
+  const [note, setNote] = useState(() => editEntry?.note ?? '');
   const [saveError, setSaveError] = useState<string | null>(null);
   const lastSaveAt = useRef(0);
   const saving = useRef(false);
   const addEntry = useExpensesStore((state) => state.addEntry);
+  const updateEntry = useExpensesStore((state) => state.updateEntry);
   const hasHydrated = useExpensesStore((state) => state.hasHydrated);
   const hydrationFailed = useExpensesStore((state) => state.hydrationFailed);
   const amount = Number(amountInput);
@@ -65,12 +68,14 @@ export default function AddExpenseScreen() {
     lastSaveAt.current = now;
     saving.current = true;
     try {
-      addEntry({
+      const input = {
         amount,
         category,
         date: selectedDate ?? todayDateKey(),
         ...(note.trim() ? { note: note.trim() } : {}),
-      });
+      };
+      if (editEntry) updateEntry(editEntry.id, input);
+      else addEntry(input);
       setSaveError(null);
       void requestSync();
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -118,7 +123,7 @@ export default function AddExpenseScreen() {
       <SafeAreaView style={styles.sheet} edges={['bottom']}>
         <View style={styles.handle} />
         <View style={styles.sheetHeader}>
-          <Text style={styles.title}>Add expense</Text>
+          <Text style={styles.title}>{editEntry ? 'Edit expense' : 'Add expense'}</Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close add expense"
@@ -250,13 +255,13 @@ export default function AddExpenseScreen() {
         <View style={[styles.saveArea, { paddingBottom: Math.max(insets.bottom, space.md) }]}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Save expense"
+            accessibilityLabel={editEntry ? 'Save expense changes' : 'Save expense'}
             accessibilityState={{ disabled: !isValidAmount }}
             disabled={!isValidAmount}
             onPress={saveExpense}
             style={[styles.saveButton, !isValidAmount && styles.saveButtonDisabled]}
           >
-            <Text style={[styles.saveText, !isValidAmount && styles.saveTextDisabled]}>Save</Text>
+            <Text style={[styles.saveText, !isValidAmount && styles.saveTextDisabled]}>{editEntry ? 'Save changes' : 'Save'}</Text>
           </Pressable>
         </View>
       </SafeAreaView>

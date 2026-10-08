@@ -84,6 +84,20 @@ export function monthTotal(entries: ExpenseForCalc[], monthKey: string, throughD
   }));
 }
 
+export function filteredMonthTotal(
+  entries: ExpenseForCalc[],
+  monthKey: string,
+  selectedCategories: readonly Category[],
+  throughDay?: number,
+): number {
+  const selected = new Set(selectedCategories);
+  return sumAmounts(entriesForMonth(entries, monthKey).filter((entry) => {
+    if (!selected.has(entry.category)) return false;
+    if (throughDay === undefined) return true;
+    return Number(entry.date.slice(8, 10)) <= throughDay;
+  }));
+}
+
 export function daysElapsed(monthKey: string, todayKey: string): number {
   const monthDate = parseMonthKey(monthKey);
   const today = parseDateKey(todayKey);
@@ -174,7 +188,12 @@ export function categoryShares(entries: ExpenseForCalc[], monthKey: string, thro
   return tenths.map(({ category, amount, tenths: shareTenths }) => ({ category, amount, percent: shareTenths / 10 }));
 }
 
-export function dailyExpenseRows(entries: ExpenseForCalc[], monthKey: string, throughDay?: number): DailyExpenseRow[] {
+export function dailyExpenseRows(
+  entries: ExpenseForCalc[],
+  monthKey: string,
+  throughDay?: number,
+  selectedCategories?: readonly Category[],
+): DailyExpenseRow[] {
   const monthDate = parseMonthKey(monthKey);
   if (!monthDate) return [];
   const dayCount = Math.min(throughDay ?? getDaysInMonth(monthDate), getDaysInMonth(monthDate));
@@ -190,7 +209,9 @@ export function dailyExpenseRows(entries: ExpenseForCalc[], monthKey: string, th
   return Array.from({ length: dayCount }, (_, index) => {
     const date = format(addDays(monthDate, index), 'yyyy-MM-dd');
     const categoryTotals = totalsByDate.get(date) ?? emptyCategoryTotals();
-    const total = categories.reduce((sum, category) => sum + categoryTotals[category], 0);
+    const total = selectedCategories
+      ? selectedCategories.reduce((sum, category) => sum + categoryTotals[category], 0)
+      : categories.reduce((sum, category) => sum + categoryTotals[category], 0);
     return { date, categories: categoryTotals, total };
   });
 }

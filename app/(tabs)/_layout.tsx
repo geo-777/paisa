@@ -15,11 +15,15 @@ const DashboardIcon = ({ color, size }: { color: ColorValue; size: number }) => 
 const AnalyticsIcon = ({ color, size }: { color: ColorValue; size: number }) => (
   <Feather name="pie-chart" color={color} size={size} />
 );
+const MonthlyIcon = ({ color, size }: { color: ColorValue; size: number }) => (
+  <Feather name="calendar" color={color} size={size} />
+);
 
 const tabOptions = {
   index: { title: 'Home', tabBarIcon: HomeIcon },
   dashboard: { title: 'Dashboard', tabBarIcon: DashboardIcon },
   analytics: { title: 'Analytics', tabBarIcon: AnalyticsIcon },
+  monthly: { title: 'Monthly', tabBarIcon: MonthlyIcon },
 };
 
 export default function TabLayout() {
@@ -50,6 +54,7 @@ export default function TabLayout() {
       <Tabs.Screen name="index" options={tabOptions.index} />
       <Tabs.Screen name="dashboard" options={tabOptions.dashboard} />
       <Tabs.Screen name="analytics" options={tabOptions.analytics} />
+      <Tabs.Screen name="monthly" options={tabOptions.monthly} />
     </Tabs>
   );
 }
