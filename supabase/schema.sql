@@ -31,7 +31,6 @@ create table public.user_settings (
   user_id uuid primary key default auth.uid() references auth.users(id) on delete cascade,
   sheets_url text,
   sheets_token text,
-  sheets_enabled boolean not null default false,
   updated_at timestamptz not null default now()
 );
 alter table public.user_settings enable row level security;

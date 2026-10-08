@@ -8,7 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { useSessionStore } from '@/src/store/useSession';
 import { startSyncListeners } from '@/src/sync/queue';
-import { startSheetsOutboxListeners } from '@/src/data/sheetsOutbox';
+import { startSheetsScheduler } from '@/src/data/sheetsScheduler';
 import { colors } from '@/src/theme/tokens';
 
 void SplashScreen.preventAutoHideAsync();
@@ -24,7 +24,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     const stopExpenses = startSyncListeners();
-    const stopSheets = startSheetsOutboxListeners();
+    const stopSheets = startSheetsScheduler();
     return () => { stopExpenses(); stopSheets(); };
   }, []);
 

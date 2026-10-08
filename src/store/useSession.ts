@@ -6,7 +6,7 @@ import { persistStorage } from '@/src/lib/persistStorage';
 import { supabase } from '@/src/data/supabase';
 import { useExpensesStore } from '@/src/store/useExpenses';
 import { clearCachedSheetsSettings, loadSheetsSettings } from '@/src/data/sheetsSettings';
-import { sheetsOutbox } from '@/src/data/sheetsOutbox';
+import { requestDailySheetsSync } from '@/src/data/sheetsScheduler';
 
 export type SessionStatus = 'checking' | 'signedOut' | 'signedIn';
 type SessionUser = { id: string; email: string };
@@ -49,7 +49,7 @@ export const useSessionStore = create<SessionState>()(persist((set) => ({
     set({ status: session ? 'signedIn' : 'signedOut', user: session?.user.email ? { id: session.user.id, email: session.user.email } : null });
     if (session) {
       void requestSync({ pull: true });
-      void loadSheetsSettings().then(() => sheetsOutbox.flush()).catch(() => undefined);
+      void loadSheetsSettings().then(() => requestDailySheetsSync()).catch(() => undefined);
     }
     supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!nextSession) clearCachedSheetsSettings();
@@ -61,7 +61,7 @@ export const useSessionStore = create<SessionState>()(persist((set) => ({
       });
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         setTimeout(() => { void requestSync({ pull: true }); }, 0);
-        if (event === 'SIGNED_IN') void loadSheetsSettings().then(() => sheetsOutbox.flush()).catch(() => undefined);
+        if (event === 'SIGNED_IN') void loadSheetsSettings().then(() => requestDailySheetsSync()).catch(() => undefined);
       }
     });
   },
@@ -80,7 +80,7 @@ export const useSessionStore = create<SessionState>()(persist((set) => ({
       if (result.data.user) useExpensesStore.getState().activateUser(result.data.user.id);
       set({ status: 'signedIn', isBusy: false, user: result.data.user?.email ? { id: result.data.user.id, email: result.data.user.email } : null });
       void requestSync({ pull: true });
-      void loadSheetsSettings().then(() => sheetsOutbox.flush()).catch(() => undefined);
+      void loadSheetsSettings().then(() => requestDailySheetsSync()).catch(() => undefined);
       return true;
     } catch (error) {
       set({ isBusy: false, errorMessage: authMessage(error) });

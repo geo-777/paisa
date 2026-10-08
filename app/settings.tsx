@@ -3,17 +3,17 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { format } from 'date-fns';
 
 import { useExpensesStore } from '@/src/store/useExpenses';
 import { useSessionStore } from '@/src/store/useSession';
 import { requestSync } from '@/src/sync/queue';
 import { useNetworkStatus } from '@/src/hooks/useNetworkStatus';
 import { colors, radius, screenPadding, space } from '@/src/theme/tokens';
+import { todayDateKey } from '@/src/lib/dates';
 import { loadSheetsSettings, saveSheetsSettings, type SheetsSettings } from '@/src/data/sheetsSettings';
-import { sheetsActions, SheetsError } from '@/src/data/sheetsMirror';
-import { getSheetsOutboxStatus, sheetsOutbox, subscribeSheetsOutboxStatus } from '@/src/data/sheetsOutbox';
-import { fetchAllExpenses } from '@/src/data/expensesApi';
-import type { Entry } from '@/src/store/useExpenses';
+import { testSheetsConnection } from '@/src/data/sheetsSync';
+import { getSheetsSyncStatus, refreshSheetsSyncStatus, runManualDailySync, runManualFullSync, subscribeSheetsSyncStatus } from '@/src/data/sheetsScheduler';
 
 const labels = {
   synced: 'Synced',
@@ -21,6 +21,10 @@ const labels = {
   offline: 'Offline',
   failed: 'Sync failed',
 } as const;
+
+function isValidSheetsUrl(url: string): boolean {
+  return url.startsWith('https://script.google.com/') && url.endsWith('/exec');
+}
 
 export default function SettingsScreen() {
   const { isOffline } = useNetworkStatus();
@@ -36,60 +40,71 @@ export default function SettingsScreen() {
   const [sheets, setSheets] = useState<SheetsSettings>({ sheets_url: '', sheets_token: '', enabled: false });
   const [sheetsBusy, setSheetsBusy] = useState(false);
   const [sheetsMessage, setSheetsMessage] = useState('');
-  const [sheetsPending, setSheetsPending] = useState(0);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [backfill, setBackfill] = useState<{ done: number; total: number } | null>(null);
-  const [linkProblem, setLinkProblem] = useState(false);
-  const [outboxStatus, setOutboxStatus] = useState(getSheetsOutboxStatus());
+  const [fullProgress, setFullProgress] = useState<{ completed: number; total: number; month: string } | null>(null);
+  const [syncStatus, setSyncStatus] = useState(getSheetsSyncStatus());
+  const [linkProblem, setLinkProblem] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
-    void loadSheetsSettings().then((value) => { if (live) setSheets(value); }).catch(() => {
-      if (live) setSheetsMessage('Could not load Sheets settings. Check that the database schema is installed.');
+    void loadSheetsSettings().then((value) => { if (live) setSheets(value); }).catch((error) => {
+      if (live) setSheetsMessage(error instanceof Error ? error.message : 'Could not load Sheets settings. Check that the database schema is installed.');
     });
-    const refresh = () => { void sheetsOutbox.count().then((count) => { if (live) setSheetsPending(count); }); };
-    const unsubscribeStatus = subscribeSheetsOutboxStatus(setOutboxStatus);
-    refresh();
-    const timer = setInterval(refresh, 1000);
-    return () => { live = false; clearInterval(timer); unsubscribeStatus(); };
-  }, []);
+    void refreshSheetsSyncStatus();
+    const unsubscribeStatus = subscribeSheetsSyncStatus((next) => {
+      setSyncStatus(next);
+      if (!next.error && !next.syncing) setLinkProblem(null);
+    });
+    return () => { live = false; unsubscribeStatus(); };
+  }, [user?.id]);
 
   const persistSheets = async (next: SheetsSettings) => {
+    if (next.sheets_url.trim() && !isValidSheetsUrl(next.sheets_url.trim())) {
+      setSheetsMessage('URL must start with https://script.google.com/ and end with /exec.');
+      return;
+    }
+    if (next.enabled && (!isValidSheetsUrl(next.sheets_url.trim()) || !next.sheets_token.trim())) {
+      setSheetsMessage('Add a valid Apps Script URL and token before enabling sync.');
+      return;
+    }
     setSheets(next);
     setSheetsBusy(true);
     setSheetsMessage('');
-    try { await saveSheetsSettings(next); setLinkProblem(false); void sheetsOutbox.flush(); }
+    try { await saveSheetsSettings(next); setLinkProblem(null); }
     catch (error) { setSheetsMessage(error instanceof Error ? error.message : 'Could not save Sheets settings.'); }
     finally { setSheetsBusy(false); }
   };
   const testSheets = async () => {
     setSheetsBusy(true); setSheetsMessage('');
-    try { await saveSheetsSettings(sheets); await sheetsActions.ping(sheets.sheets_url, sheets.sheets_token); setLinkProblem(false); setSheetsMessage('Connection successful.'); }
-    catch (error) { setLinkProblem(error instanceof SheetsError); setSheetsMessage(error instanceof SheetsError ? `Sheets endpoint: ${error.message}` : `Could not save or test settings: ${error instanceof Error ? error.message : 'unknown error'}`); }
+    try { await saveSheetsSettings(sheets); await testSheetsConnection(); setLinkProblem(null); setSheetsMessage('Connection successful.'); }
+    catch (error) { const message = error instanceof Error ? error.message : 'Could not test the connection.'; setLinkProblem(message); setSheetsMessage(message); }
     finally { setSheetsBusy(false); }
   };
-  const runBackfill = async () => {
-    setSheetsBusy(true); setBackfill({ done: 0, total: 0 }); setSheetsMessage('');
+  const runDaily = async () => {
+    setSheetsBusy(true); setSheetsMessage('');
+    try { await saveSheetsSettings(sheets); await runManualDailySync(); setLinkProblem(null); }
+    catch (error) { const message = error instanceof Error ? error.message : 'Could not sync this month to Sheets.'; setSheetsMessage(message); setLinkProblem(message); }
+    finally { setSheetsBusy(false); }
+  };
+  const runFull = async () => {
+    setSheetsBusy(true); setFullProgress({ completed: 0, total: 0, month: '' }); setSheetsMessage('');
     try {
       await saveSheetsSettings(sheets);
-      let all: Entry[];
-      try { all = await fetchAllExpenses(); }
-      catch (error) { throw new Error(`Could not fetch expenses from Supabase: ${error instanceof Error ? error.message : 'unknown error'}`); }
-      setBackfill({ done: 0, total: all.length });
-      for (let offset = 0; offset < all.length; offset += 200) {
-        try { await sheetsActions.backfill(sheets.sheets_url, sheets.sheets_token, all.slice(offset, offset + 200)); }
-        catch (error) { throw new Error(`Sheets backfill failed at expense ${Math.min(offset + 1, all.length)}: ${error instanceof Error ? error.message : 'unknown error'}`); }
-        setBackfill({ done: Math.min(offset + 200, all.length), total: all.length });
-      }
-      setSheetsMessage(`Synced ${all.length} ${all.length === 1 ? 'expense' : 'expenses'} to Sheets.`);
-      setLinkProblem(false);
+      await runManualFullSync(setFullProgress);
+      setLinkProblem(null);
+      setSheetsMessage('All expense months synced to Sheets.');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not sync everything to Sheets.';
-      setLinkProblem(message.startsWith('Sheets backfill failed:') || message.startsWith('Sheets backfill failed at'));
-      setSheetsMessage(message);
-    }
-    finally { setSheetsBusy(false); setBackfill(null); }
+      setSheetsMessage(message); setLinkProblem(message);
+    } finally { setSheetsBusy(false); setFullProgress(null); }
   };
+
+  const validSheetsUrl = isValidSheetsUrl(sheets.sheets_url.trim());
+  const runStatusText = syncStatus.syncing ? 'Syncing…'
+    : linkProblem || syncStatus.error ? `Link problem: ${linkProblem ?? syncStatus.error}`
+    : syncStatus.lastSyncDate === todayDateKey() && syncStatus.lastSyncAt
+        ? `Last synced today ${format(syncStatus.lastSyncAt, 'HH:mm')}`
+        : syncStatus.lastSyncAt ? `Last synced ${format(syncStatus.lastSyncAt, 'dd MMM HH:mm')}` : 'Not synced yet';
 
   const retrySync = () => {
     retryFailed();
@@ -147,19 +162,21 @@ export default function SettingsScreen() {
         )}
 
         <Text style={[styles.label, styles.syncLabel]}>GOOGLE SHEETS SYNC</Text>
-        <Text style={styles.helper}>Optional one-way copy. Supabase remains the source of truth.</Text>
-        <TextInput accessibilityLabel="Google Sheets web app link" autoCapitalize="none" keyboardType="url" value={sheets.sheets_url} onChangeText={(sheets_url) => setSheets({ ...sheets, sheets_url })} onEndEditing={() => { void persistSheets(sheets); }} placeholder="Apps Script web app URL" placeholderTextColor={colors.textFaint} style={styles.field} />
+        <Text style={styles.helper}>Optional daily snapshot. Supabase remains the source of truth.</Text>
+        <TextInput accessibilityLabel="Google Sheets web app link" autoCapitalize="none" keyboardType="url" value={sheets.sheets_url} onChangeText={(sheets_url) => setSheets({ ...sheets, sheets_url })} onEndEditing={() => { void persistSheets(sheets); }} placeholder="https://script.google.com/.../exec" placeholderTextColor={colors.textFaint} style={styles.field} />
+        {sheets.sheets_url && !validSheetsUrl ? <Text style={styles.errorText} accessibilityRole="alert">URL must start with https://script.google.com/ and end with /exec.</Text> : null}
         <TextInput accessibilityLabel="Google Sheets token" autoCapitalize="none" value={sheets.sheets_token} onChangeText={(sheets_token) => setSheets({ ...sheets, sheets_token })} onEndEditing={() => { void persistSheets(sheets); }} placeholder="Shared token" placeholderTextColor={colors.textFaint} secureTextEntry style={styles.field} />
-        <View style={styles.toggleRow}><Text style={styles.statusText}>Enable mirror</Text><Switch accessibilityLabel="Enable Google Sheets sync" value={sheets.enabled} onValueChange={(enabled) => { void persistSheets({ ...sheets, enabled }); }} trackColor={{ false: colors.border, true: colors.down }} thumbColor={colors.text} /></View>
-        <Text style={styles.mirrorStatus} accessibilityLiveRegion="polite">{linkProblem || outboxStatus.linkProblem || (sheets.enabled && (!sheets.sheets_url || !sheets.sheets_token)) ? 'Link problem' : sheetsPending > 0 ? `${sheetsPending} pending` : outboxStatus.syncing || sheetsBusy && !backfill ? 'Syncing' : sheets.enabled ? 'Up to date' : 'Disabled'}</Text>
-        {sheetsMessage || outboxStatus.message ? <Text style={[styles.helper, (linkProblem || outboxStatus.linkProblem) && styles.errorText]} accessibilityRole={linkProblem || outboxStatus.linkProblem ? 'alert' : undefined}>{sheetsMessage || outboxStatus.message}</Text> : null}
+        <View style={styles.toggleRow}><Text style={styles.statusText}>Enable sync</Text><Switch accessibilityLabel="Enable Google Sheets sync" value={sheets.enabled} onValueChange={(enabled) => { void persistSheets({ ...sheets, enabled }); }} trackColor={{ false: colors.border, true: colors.down }} thumbColor={colors.text} /></View>
+        <Text style={styles.mirrorStatus} accessibilityLiveRegion="polite">{runStatusText}</Text>
+        {sheetsMessage ? <Text style={[styles.helper, linkProblem && styles.errorText]} accessibilityRole={linkProblem ? 'alert' : undefined}>{sheetsMessage}</Text> : null}
         <View style={styles.buttonRow}>
           <Pressable accessibilityRole="button" accessibilityLabel="Test Google Sheets connection" disabled={sheetsBusy} onPress={() => { void testSheets(); }} style={styles.secondaryButton}><Text style={styles.actionText}>Test connection</Text></Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Sync all expenses to Google Sheets" disabled={sheetsBusy || !sheets.sheets_url || !sheets.sheets_token} onPress={() => { void runBackfill(); }} style={styles.secondaryButton}>{sheetsBusy && !backfill ? <ActivityIndicator color={colors.text} /> : <Text style={styles.actionText}>Sync everything</Text>}</Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Sync current and previous months now" disabled={sheetsBusy || !validSheetsUrl || !sheets.sheets_token} onPress={() => { void runDaily(); }} style={styles.secondaryButton}>{sheetsBusy && !fullProgress ? <ActivityIndicator color={colors.text} /> : <Text style={styles.actionText}>Sync now</Text>}</Pressable>
         </View>
-        {backfill ? <View><Text style={styles.helper}>{backfill.total ? `${backfill.done} of ${backfill.total} expenses` : 'Loading expenses…'}</Text><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${backfill.total ? (backfill.done / backfill.total) * 100 : 0}%` }]} /></View></View> : null}
+        <Pressable accessibilityRole="button" accessibilityLabel="Sync every expense month to Google Sheets" disabled={sheetsBusy || !validSheetsUrl || !sheets.sheets_token} onPress={() => { void runFull(); }} style={styles.fullSyncButton}>{sheetsBusy && fullProgress ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.primaryActionText}>Sync everything</Text>}</Pressable>
+        {fullProgress ? <View><Text style={styles.helper}>{fullProgress.total ? `${fullProgress.completed} of ${fullProgress.total} months${fullProgress.month ? ` · ${fullProgress.month}` : ''}` : 'Loading expenses…'}</Text><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${fullProgress.total ? (fullProgress.completed / fullProgress.total) * 100 : 0}%` }]} /></View></View> : null}
         <Pressable accessibilityRole="button" accessibilityLabel="Show Google Sheets setup instructions" accessibilityState={{ expanded: helpOpen }} onPress={() => setHelpOpen(!helpOpen)} style={styles.helpButton}><Text style={styles.actionText}>How to set up</Text><Feather name={helpOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} /></Pressable>
-        {helpOpen ? <Text style={styles.helper}>1. Create a Google Sheet and open Extensions → Apps Script.\n2. Paste the project’s docs/sheets-mirror/Code.gs script and set its shared token.\n3. Deploy as a Web app, execute as yourself, and choose access appropriate for the script.\n4. Google may show an “unverified app” warning because this script is not verified; continue only if you trust the script and deployment.\n5. Copy the web app URL here, enter the same token, test the connection, then enable sync.\n6. After editing the script, create a new version and update the deployment.</Text> : null}
+        {helpOpen ? <Text style={styles.helper}>1. Create a Google Sheet and open Extensions → Apps Script.\n2. Paste the project’s docs/sheets-mirror/Code.gs script and set its shared token.\n3. Deploy as a Web app, execute as yourself, and choose access appropriate for the script.\n4. Google may show an “unverified app” warning because this script is not verified; continue only if you trust the script and deployment.\n5. Copy the web app URL here, enter the same token, test the connection, then enable sync.\n6. After editing the script, create a new version and update the deployment. The sheet is overwritten on each sync; do not edit it manually.</Text> : null}
 
         <Pressable
           accessibilityRole="button"
@@ -208,6 +225,8 @@ const styles = StyleSheet.create({
   mirrorStatus: { minHeight: 36, color: colors.down, fontFamily: 'Inter_500Medium', fontSize: 14, paddingTop: space.sm },
   buttonRow: { flexDirection: 'row', gap: space.sm },
   secondaryButton: { flex: 1, minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.sm },
+  fullSyncButton: { minHeight: 52, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  primaryActionText: { color: colors.onPrimary, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
   helpButton: { minHeight: 48, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.border },
   progressTrack: { height: 6, borderRadius: radius.pill, backgroundColor: colors.border, overflow: 'hidden', marginTop: space.sm },
   progressFill: { height: 6, backgroundColor: colors.down },

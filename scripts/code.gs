@@ -5,13 +5,34 @@
  * cannot expose your data (worst case: someone writes junk rows).
  */
 
-const TOKEN = "eDRjC5xxxq_F2sUoWB9dnmGK7bM9ZDgxeSwi2yivwsY";
-const LOG = "Log";
-const CATS = ["Breakfast", "Lunch", "Dinner", "Snacks", "Misc"];
-const LOG_HEADER = ["id", "date", "category", "amount", "note", "created_at"];
+const TOKEN = "2V8WEoZH9MpDJadqEDmMzah07fI1CgL1yyCLCwsB";
+const CATS = ["breakfast", "lunch", "dinner", "snacks", "misc"];
+const HEADERS = [
+  "Date",
+  "Breakfast",
+  "Lunch",
+  "Dinner",
+  "Snacks",
+  "Misc",
+  "Total",
+];
+const MONTH_NAMES = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+];
 
 function doGet() {
-  return json_({ ok: true, service: "student-finance-mirror" });
+  return json_({ ok: true, service: "student-finance-mirror", version: 2 });
 }
 
 function doPost(e) {
@@ -23,23 +44,16 @@ function doPost(e) {
 
     lock = LockService.getScriptLock();
     lock.waitLock(20000);
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
 
     switch (body.action) {
       case "ping":
         return json_({ ok: true });
-      case "upsert":
-        upsertMany_(ss, [body.entry]);
-        return json_({ ok: true });
-      case "delete":
-        return json_({ ok: true, deleted: deleteById_(ss, body.id) });
-      case "backfill":
-        if (!Array.isArray(body.entries))
-          throw new Error("entries must be an array");
-        if (body.entries.length > 500)
-          throw new Error("max 500 entries per request");
-        upsertMany_(ss, body.entries);
-        return json_({ ok: true, count: body.entries.length });
+      case "syncMonth": {
+        if (!Array.isArray(body.rows)) throw new Error("rows must be an array");
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const tab = syncMonth_(ss, body.month, body.rows);
+        return json_({ ok: true, tab: tab });
+      }
       default:
         return json_({ ok: false, error: "unknown action" });
     }
@@ -59,109 +73,71 @@ function json_(obj) {
   );
 }
 
-function logSheet_(ss) {
-  let sh = ss.getSheetByName(LOG);
-  if (sh) return sh;
-  sh = ss.insertSheet(LOG);
-  sh.getRange("A:C").setNumberFormat("@"); // plain text: keeps dates as text, blocks formula injection
-  sh.getRange("E:F").setNumberFormat("@");
-  sh.getRange(1, 1, 1, LOG_HEADER.length)
-    .setValues([LOG_HEADER])
-    .setFontWeight("bold");
-  sh.setFrozenRows(1);
-  return sh;
+function pad_(n) {
+  return n < 10 ? "0" + n : String(n);
 }
 
-function toRow_(en) {
-  if (!en || typeof en.id !== "string" || !en.id)
-    throw new Error("entry.id required");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(en.date))
-    throw new Error("entry.date must be YYYY-MM-DD");
-  const cat = String(en.category || "");
-  const category = cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase();
-  if (CATS.indexOf(category) === -1)
-    throw new Error("invalid category: " + cat);
-  const amount = Number(en.amount);
-  if (!isFinite(amount) || amount <= 0) throw new Error("invalid amount");
-  return [
-    en.id,
-    en.date,
-    category,
-    amount,
-    String(en.note || ""),
-    String(en.createdAt || ""),
-  ];
+function tabName_(y, m) {
+  return MONTH_NAMES[m - 1] + "-" + y; // e.g. october-2026
 }
 
-function upsertMany_(ss, entries) {
-  const sh = logSheet_(ss);
-  const last = sh.getLastRow();
-  const data =
-    last > 1 ? sh.getRange(2, 1, last - 1, LOG_HEADER.length).getValues() : [];
-  const idx = {};
-  data.forEach(function (r, i) {
-    idx[r[0]] = i;
-  });
-
-  const months = {};
-  entries.forEach(function (en) {
-    const row = toRow_(en);
-    months[en.date.slice(0, 7)] = true;
-    if (idx[en.id] !== undefined) {
-      data[idx[en.id]] = row;
-    } else {
-      idx[en.id] = data.length;
-      data.push(row);
-    }
-  });
-
-  if (data.length)
-    sh.getRange(2, 1, data.length, LOG_HEADER.length).setValues(data);
-  Object.keys(months).forEach(function (m) {
-    ensureMonth_(ss, m);
-  });
+function dateLabel_(d, m, y) {
+  return pad_(d) + "-" + pad_(m) + "-" + String(y).slice(2); // e.g. 08-10-26
 }
 
-function deleteById_(ss, id) {
-  const sh = logSheet_(ss);
-  const last = sh.getLastRow();
-  if (last < 2) return false;
-  const ids = sh.getRange(2, 1, last - 1, 1).getValues();
-  for (let i = 0; i < ids.length; i++) {
-    if (ids[i][0] === id) {
-      sh.deleteRow(i + 2);
-      return true;
-    }
-  }
-  return false; // already gone: delete is idempotent
+function amount_(v) {
+  if (v === undefined || v === null || v === "") return 0;
+  const n = Number(v);
+  if (!isFinite(n) || n < 0) throw new Error("invalid amount: " + v);
+  return Math.round(n * 100) / 100;
 }
 
-/** Creates the 'YYYY-MM' tab once: Date | Breakfast | Lunch | Dinner | Snacks | Misc | Total */
-function ensureMonth_(ss, ym) {
-  if (ss.getSheetByName(ym)) return;
-  const y = Number(ym.slice(0, 4));
-  const m = Number(ym.slice(5, 7));
+/**
+ * rows: [{ date: 'YYYY-MM-DD', breakfast, lunch, dinner, snacks, misc }] (only days with spending needed).
+ * Rewrites every day of the month, so the tab always matches the app. Idempotent.
+ */
+function syncMonth_(ss, month, rows) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(month)))
+    throw new Error("month must be YYYY-MM");
+  if (rows.length > 31) throw new Error("too many rows");
+  const y = Number(month.slice(0, 4));
+  const m = Number(month.slice(5, 7));
   const days = new Date(y, m, 0).getDate();
 
-  const sh = ss.insertSheet(ym);
-  sh.getRange("A:A").setNumberFormat("@"); // dates stored as 'YYYY-MM-DD' text, matches Log!B
+  const byDate = {};
+  rows.forEach(function (r) {
+    if (
+      !r ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(r.date) ||
+      r.date.slice(0, 7) !== month
+    ) {
+      throw new Error("row date outside month: " + (r && r.date));
+    }
+    byDate[r.date] = r;
+  });
 
-  const rows = [["Date"].concat(CATS, ["Total"])];
-  const cols = ["B", "C", "D", "E", "F"];
-  for (let d = 1; d <= days; d++) {
-    const r = d + 1;
-    const date = ym + "-" + (d < 10 ? "0" + d : d);
-    const row = [date];
-    cols.forEach(function (c) {
-      row.push(
-        "=SUMIFS(Log!$D:$D,Log!$B:$B,$A" + r + ",Log!$C:$C," + c + "$1)",
-      );
-    });
-    row.push("=SUM(B" + r + ":F" + r + ")");
-    rows.push(row);
+  const name = tabName_(y, m);
+  let sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.getRange(1, 1, 1, HEADERS.length)
+      .setValues([HEADERS])
+      .setFontWeight("bold");
+    sh.getRange("F1").setNote("Misc = non-food stuff");
+    sh.setFrozenRows(1);
   }
-  sh.getRange(1, 1, rows.length, 7).setValues(rows);
-  sh.getRange(1, 1, 1, 7).setFontWeight("bold");
-  sh.getRange("F1").setNote("Misc = non-food stuff");
-  sh.setFrozenRows(1);
+  sh.getRange("A:A").setNumberFormat("@"); // keep dd-mm-yy as plain text
+
+  const out = [];
+  for (let d = 1; d <= days; d++) {
+    const r = byDate[month + "-" + pad_(d)] || {};
+    const row = [dateLabel_(d, m, y)];
+    CATS.forEach(function (c) {
+      row.push(amount_(r[c]));
+    });
+    row.push("=SUM(B" + (d + 1) + ":F" + (d + 1) + ")");
+    out.push(row);
+  }
+  sh.getRange(2, 1, days, HEADERS.length).setValues(out);
+  return name;
 }

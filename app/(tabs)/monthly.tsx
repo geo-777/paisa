@@ -13,7 +13,6 @@ import { useExpensesStore } from '@/src/store/useExpenses';
 import { loadMonth, requestSync } from '@/src/sync/queue';
 import { colors, radius, screenPadding, space } from '@/src/theme/tokens';
 import { useNetworkStatus } from '@/src/hooks/useNetworkStatus';
-import { enqueueSheetsOpIfEnabled } from '@/src/data/sheetsOutbox';
 
 export default function MonthlyScreen() {
   const [todayKey, setTodayKey] = useState(formatDateKey(new Date()));
@@ -59,7 +58,6 @@ export default function MonthlyScreen() {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Move', style: 'destructive', onPress: () => {
           deleteEntry(entry.id);
-          void enqueueSheetsOpIfEnabled({ type: 'delete', entryId: entry.id }).catch(() => undefined);
           void requestSync();
         } },
       ],

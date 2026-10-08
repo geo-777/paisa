@@ -23,7 +23,6 @@ import { useExpensesStore } from '@/src/store/useExpenses';
 import { requestSync } from '@/src/sync/queue';
 import { colors, radius, screenPadding, space } from '@/src/theme/tokens';
 import { useNetworkStatus } from '@/src/hooks/useNetworkStatus';
-import { enqueueSheetsOpIfEnabled } from '@/src/data/sheetsOutbox';
 
 export default function AddExpenseScreen() {
   const { editId } = useLocalSearchParams<{ editId?: string }>();
@@ -77,8 +76,7 @@ export default function AddExpenseScreen() {
       };
       if (editEntry) updateEntry(editEntry.id, input);
       else {
-        const entry = addEntry(input);
-        void enqueueSheetsOpIfEnabled({ type: 'upsert', entryId: entry.id }).catch(() => undefined);
+        addEntry(input);
       }
       setSaveError(null);
       void requestSync();
