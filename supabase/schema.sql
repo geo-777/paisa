@@ -26,3 +26,15 @@ create policy "delete own" on public.expenses
 
 -- New Supabase projects require explicit grants for tables used through the Data API.
 grant select, insert, update, delete on public.expenses to authenticated;
+
+create table public.user_settings (
+  user_id uuid primary key default auth.uid() references auth.users(id) on delete cascade,
+  sheets_url text,
+  sheets_token text,
+  sheets_enabled boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+alter table public.user_settings enable row level security;
+create policy "own settings" on public.user_settings for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+grant select, insert, update, delete on public.user_settings to authenticated;

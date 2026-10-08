@@ -1,6 +1,6 @@
 # Product & Technical Context
 
-This Supabase specification replaces the former Google Sheets specification. Google Sign-In, Drive, Sheets, spreadsheet tabs and the Sheets sync queue are obsolete.
+Supabase is the source of truth. An optional one-way Google Sheets mirror is supported for users who configure an Apps Script web app. The app never reads data from Sheets; Google Sign-In and Drive integration are not used.
 
 ## Product
 
@@ -74,3 +74,7 @@ Recompute today on foreground and month rollover. Expenses after midnight belong
 ## Definition of done
 
 Sign-up, sign-in and sign-out work; sessions survive restart; an expense appears immediately and persists to Supabase; reinstall plus sign-in restores server data; offline add syncs once; RLS prevents cross-user access; calculation rules have unit tests for month boundaries and missing baselines; no NaN or fake percentages; typecheck, lint and tests pass; app runs in Expo Go.
+
+## Optional Google Sheets mirror
+
+The mirror is opt-in and one-way: expense additions and deletes are sent to the user's configured Apps Script endpoint after their Supabase write succeeds or is durably queued locally. Supabase remains authoritative, and mirror failures never delay expense logging. There is no read-from-Sheets path. Configuration lives in the owner-only `user_settings` table; the token is also cached locally in SecureStore. A persisted, serial outbox retries writes while online and enabled. Settings provides connection testing, status, full backfill in chunks of at most 200, and setup instructions. Incremental edits and restores are not mirrored.

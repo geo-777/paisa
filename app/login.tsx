@@ -20,6 +20,7 @@ export default function LoginScreen() {
       <View style={styles.content}>
         <View style={styles.intro}>
           <Text style={styles.title}>Paisa</Text>
+          <Text style={styles.tagline}>A clearer view of your daily spending.</Text>
           <Text style={styles.description}>{createAccount ? 'Create an account to keep your expenses in sync.' : 'Sign in to see your expenses.'}</Text>
         </View>
         <TextInput
@@ -72,6 +73,7 @@ const styles = StyleSheet.create({
   intro: { gap: space.sm, marginBottom: space.md },
   title: { color: colors.text, fontFamily: 'Inter_600SemiBold', fontSize: 22 },
   description: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 24 },
+  tagline: { color: colors.down, fontFamily: 'Inter_500Medium', fontSize: 15, lineHeight: 22 },
   input: { minHeight: 54, paddingHorizontal: space.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, color: colors.text, backgroundColor: colors.surface, fontFamily: 'Inter_400Regular', fontSize: 16 },
   error: { color: colors.up, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20 },
   offline: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20 },

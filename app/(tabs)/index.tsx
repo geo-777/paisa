@@ -14,6 +14,7 @@ import { useExpensesStore, useTodayEntries, type Entry } from '@/src/store/useEx
 import { colors, radius, screenPadding, space } from '@/src/theme/tokens';
 import { requestSync } from '@/src/sync/queue';
 import { useNetworkStatus } from '@/src/hooks/useNetworkStatus';
+import { enqueueSheetsOpIfEnabled } from '@/src/data/sheetsOutbox';
 
 export default function HomeScreen() {
   const [todayKey, setTodayKey] = useState(formatDateKey(new Date()));
@@ -63,6 +64,7 @@ export default function HomeScreen() {
     <EntryRow entry={item} onDelete={() => {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       deleteEntry(item.id);
+      void enqueueSheetsOpIfEnabled({ type: 'delete', entryId: item.id }).catch(() => undefined);
       void requestSync();
     }} />
   );

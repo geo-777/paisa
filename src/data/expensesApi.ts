@@ -64,6 +64,23 @@ export async function fetchExpenses(from: string, through: string): Promise<Entr
   return rows.map(toEntry);
 }
 
+export async function fetchAllExpenses(): Promise<Entry[]> {
+  const rows: ExpenseRow[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await supabase.from('expenses')
+      .select('id,date,category,amount,note,created_at')
+      .is('deleted_at', null)
+      .order('date', { ascending: false })
+      .order('id', { ascending: true })
+      .range(offset, offset + 999);
+    if (error) throw error;
+    const page = data as ExpenseRow[];
+    rows.push(...page);
+    if (page.length < 1000) break;
+  }
+  return rows.map(toEntry);
+}
+
 export async function fetchDeletedExpenses(from: string, through: string): Promise<DeletedEntry[]> {
   const rows: ExpenseRow[] = [];
   for (let offset = 0; ; offset += 1000) {

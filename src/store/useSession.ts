@@ -5,6 +5,8 @@ import { requestSync } from '@/src/sync/queue';
 import { persistStorage } from '@/src/lib/persistStorage';
 import { supabase } from '@/src/data/supabase';
 import { useExpensesStore } from '@/src/store/useExpenses';
+import { clearCachedSheetsSettings, loadSheetsSettings } from '@/src/data/sheetsSettings';
+import { sheetsOutbox } from '@/src/data/sheetsOutbox';
 
 export type SessionStatus = 'checking' | 'signedOut' | 'signedIn';
 type SessionUser = { id: string; email: string };
@@ -23,6 +25,9 @@ function authMessage(error: unknown): string {
   if (/invalid login credentials/i.test(message)) return 'Email or password is incorrect.';
   if (/already registered|user already exists/i.test(message)) return 'An account with this email already exists. Sign in instead.';
   if (/password.*(6|short|weak)/i.test(message)) return 'Use a password with at least 6 characters.';
+  if (/rate.?limit|too many requests|email rate/i.test(message)) return 'Too many sign-in or sign-up attempts. Wait a few minutes and try again.';
+  if (/email.*(invalid|format)/i.test(message)) return 'Enter a valid email address.';
+  if (/signup.*disabled|signups.*disabled/i.test(message)) return 'New accounts are temporarily unavailable. Try again later.';
   if (/network|fetch/i.test(message)) return 'Could not connect. Check your internet connection and try again.';
   return message;
 }
@@ -42,8 +47,12 @@ export const useSessionStore = create<SessionState>()(persist((set) => ({
     const session = data.session;
     useExpensesStore.getState().activateUser(session?.user.id ?? null);
     set({ status: session ? 'signedIn' : 'signedOut', user: session?.user.email ? { id: session.user.id, email: session.user.email } : null });
-    if (session) void requestSync({ pull: true });
+    if (session) {
+      void requestSync({ pull: true });
+      void loadSheetsSettings().then(() => sheetsOutbox.flush()).catch(() => undefined);
+    }
     supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!nextSession) clearCachedSheetsSettings();
       useExpensesStore.getState().activateUser(nextSession?.user.id ?? null);
       set({
         status: nextSession ? 'signedIn' : 'signedOut',
@@ -52,6 +61,7 @@ export const useSessionStore = create<SessionState>()(persist((set) => ({
       });
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         setTimeout(() => { void requestSync({ pull: true }); }, 0);
+        if (event === 'SIGNED_IN') void loadSheetsSettings().then(() => sheetsOutbox.flush()).catch(() => undefined);
       }
     });
   },
@@ -70,6 +80,7 @@ export const useSessionStore = create<SessionState>()(persist((set) => ({
       if (result.data.user) useExpensesStore.getState().activateUser(result.data.user.id);
       set({ status: 'signedIn', isBusy: false, user: result.data.user?.email ? { id: result.data.user.id, email: result.data.user.email } : null });
       void requestSync({ pull: true });
+      void loadSheetsSettings().then(() => sheetsOutbox.flush()).catch(() => undefined);
       return true;
     } catch (error) {
       set({ isBusy: false, errorMessage: authMessage(error) });
