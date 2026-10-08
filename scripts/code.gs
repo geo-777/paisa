@@ -1,11 +1,11 @@
 /**
  * Student Finance: Google Sheets mirror (write-only).
- * Paste into Extensions > Apps Script of the spreadsheet, set TOKEN, deploy as a web app.
+ * Paste into Extensions > Apps Script of the spreadsheet, set the script property, deploy as a web app.
  * The app pushes changes here. There is intentionally NO read action, so a leaked URL
  * cannot expose your data (worst case: someone writes junk rows).
  */
 
-const TOKEN = "2V8WEoZH9MpDJadqEDmMzah07fI1CgL1yyCLCwsB";
+const TOKEN_PROPERTY = "PAISA_SHEETS_TOKEN";
 const CATS = ["breakfast", "lunch", "dinner", "snacks", "misc"];
 const HEADERS = [
   "Date",
@@ -39,7 +39,10 @@ function doPost(e) {
   let lock = null;
   try {
     const body = JSON.parse(e.postData.contents);
-    if (body.token !== TOKEN)
+    const expectedToken = PropertiesService.getScriptProperties().getProperty(
+      TOKEN_PROPERTY,
+    );
+    if (!expectedToken || body.token !== expectedToken)
       return json_({ ok: false, error: "unauthorized" });
 
     lock = LockService.getScriptLock();
