@@ -233,7 +233,7 @@
       .hero-sub {
         font-size: clamp(16px, 2.2vw, 19px);
         color: var(--text-muted);
-        max-width: 620px;
+        max-width: 600px;
         margin: 0 auto 36px;
         line-height: 1.55;
       }
@@ -330,7 +330,7 @@
       /* Live Interactive Demo Section */
       .demo-section {
         margin: 50px auto 100px;
-        max-width: 920px;
+        max-width: 900px;
       }
 
       .demo-container {
@@ -340,8 +340,8 @@
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: 24px;
-        padding: 36px;
-        align-items: start;
+        padding: 32px;
+        align-items: stretch;
         box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
       }
 
@@ -353,13 +353,22 @@
         }
       }
 
-      .demo-controls-side {
+      /* Left side: Authentic Add Expense Modal Simulator */
+      .add-modal-sim {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 24px 20px;
         display: flex;
         flex-direction: column;
+        justify-content: space-between;
         gap: 20px;
       }
 
-      .demo-heading-tag {
+      .modal-header-tag {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
         font-size: 11px;
         font-weight: 600;
         letter-spacing: 0.8px;
@@ -367,104 +376,41 @@
         color: var(--text-faint);
       }
 
-      .demo-title {
-        font-family: var(--font-display);
-        font-size: 22px;
+      .amount-hero-wrapper {
+        text-align: center;
+        padding: 10px 0;
+      }
+
+      .amount-hero-display {
+        font-size: 44px;
         font-weight: 600;
-        letter-spacing: -0.4px;
+        letter-spacing: -1.5px;
         color: var(--text);
+        line-height: 1;
+        display: inline-flex;
+        align-items: baseline;
+        gap: 4px;
       }
 
-      .demo-desc {
-        font-size: 14px;
+      .amount-hero-symbol {
+        font-size: 32px;
         color: var(--text-muted);
-        line-height: 1.5;
-      }
-
-      .quick-chips-group {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-
-      .quick-chip {
-        padding: 8px 14px;
-        background: var(--surface-raised);
-        border: 1px solid var(--border);
-        border-radius: 999px;
-        font-size: 13px;
-        color: var(--text);
-        transition: all 0.15s ease;
-      }
-
-      .quick-chip:hover {
-        border-color: var(--border-hover);
-        background: #23232a;
-        transform: translateY(-1px);
-      }
-
-      .quick-chip:active {
-        transform: translateY(0);
-      }
-
-      .input-wrapper {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-
-      .input-label {
-        font-size: 12px;
         font-weight: 500;
-        color: var(--text-muted);
       }
 
-      .amount-input-box {
-        position: relative;
-        display: flex;
-        align-items: center;
-      }
-
-      .currency-symbol {
-        position: absolute;
-        left: 14px;
-        font-size: 18px;
-        font-weight: 600;
-        color: var(--text-muted);
-        pointer-events: none;
-      }
-
-      .amount-input {
-        width: 100%;
-        padding: 12px 14px 12px 34px;
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        font-size: 18px;
-        font-family: var(--font-sans);
-        color: var(--text);
-        font-weight: 600;
-        outline: none;
-        transition: border-color 0.15s ease, box-shadow 0.15s ease;
-      }
-
-      .amount-input:focus {
-        border-color: #3b3b44;
-        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.05);
-      }
-
-      .category-selector {
+      .category-chips-row {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
+        justify-content: center;
       }
 
       .cat-chip {
-        padding: 6px 12px;
-        background: var(--bg);
+        padding: 8px 14px;
+        background: var(--surface);
         border: 1px solid var(--border);
         border-radius: 999px;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 500;
         color: var(--text-muted);
         transition: all 0.15s ease;
@@ -482,55 +428,90 @@
         font-weight: 600;
       }
 
-      .time-hint {
-        font-size: 12px;
+      .time-auto-note {
+        font-size: 11px;
         color: var(--text-faint);
-        display: flex;
-        align-items: center;
-        gap: 6px;
+        text-align: center;
       }
 
-      .log-btn {
+      /* Numeric Keypad */
+      .keypad-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+
+      .keypad-btn {
+        height: 46px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.1s ease, transform 0.1s ease;
+        user-select: none;
+      }
+
+      .keypad-btn:hover {
+        background: var(--surface-raised);
+        border-color: var(--border-hover);
+      }
+
+      .keypad-btn:active {
+        transform: scale(0.96);
+      }
+
+      .save-btn {
         width: 100%;
-        padding: 14px;
+        height: 52px;
         background: var(--primary);
         color: var(--on-primary);
-        font-size: 14px;
+        font-size: 15px;
         font-weight: 600;
         border-radius: 999px;
         display: flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
-        transition: transform 0.15s ease, opacity 0.15s ease;
+        transition: opacity 0.15s ease, transform 0.15s ease;
       }
 
-      .log-btn:hover {
+      .save-btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+
+      .save-btn:not(:disabled):hover {
         opacity: 0.92;
         transform: translateY(-1px);
       }
 
-      .log-btn:active {
+      .save-btn:not(:disabled):active {
         transform: scale(0.99);
       }
 
+      /* Offline Mode Simulator Switch */
       .offline-toggle-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 10px 14px;
-        background: var(--surface-raised);
+        padding: 8px 12px;
+        background: var(--surface);
         border: 1px solid var(--border);
-        border-radius: 12px;
-        font-size: 13px;
+        border-radius: 10px;
+        font-size: 12px;
         color: var(--text-muted);
       }
 
       .switch-toggle {
         position: relative;
         display: inline-block;
-        width: 38px;
-        height: 22px;
+        width: 34px;
+        height: 20px;
       }
 
       .switch-toggle input {
@@ -548,15 +529,15 @@
         bottom: 0;
         background-color: var(--bg);
         border: 1px solid var(--border);
-        border-radius: 22px;
+        border-radius: 20px;
         transition: 0.2s;
       }
 
       .slider:before {
         position: absolute;
         content: "";
-        height: 14px;
-        width: 14px;
+        height: 12px;
+        width: 12px;
         left: 3px;
         bottom: 3px;
         background-color: var(--text-muted);
@@ -570,7 +551,7 @@
       }
 
       input:checked + .slider:before {
-        transform: translateX(16px);
+        transform: translateX(14px);
         background-color: var(--bg);
       }
 
@@ -692,7 +673,7 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
-        max-height: 220px;
+        max-height: 250px;
         overflow-y: auto;
       }
 
@@ -933,41 +914,6 @@
         line-height: 1.6;
       }
 
-      /* Real Student Scenarios */
-      .scenarios-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 16px;
-        margin-bottom: 90px;
-      }
-
-      .scenario-card {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        padding: 20px;
-      }
-
-      .scenario-timing {
-        font-family: var(--font-mono);
-        font-size: 11px;
-        color: var(--text-faint);
-        margin-bottom: 8px;
-      }
-
-      .scenario-headline {
-        font-size: 15px;
-        font-weight: 600;
-        color: var(--text);
-        margin-bottom: 4px;
-      }
-
-      .scenario-text {
-        font-size: 13px;
-        color: var(--text-muted);
-        line-height: 1.45;
-      }
-
       /* Technical Architecture Callout */
       .arch-box {
         background: var(--surface);
@@ -1146,7 +1092,6 @@
             <a href="#demo" class="nav-link">Live Demo</a>
             <a href="#why" class="nav-link">Why Paisa</a>
             <a href="#features" class="nav-link">Features</a>
-            <a href="#scenarios" class="nav-link">College Life</a>
             <a href="#architecture" class="nav-link">Architecture</a>
           </nav>
 
@@ -1224,69 +1169,63 @@
       <!-- Live Interactive Demo -->
       <section id="demo" class="demo-section">
         <div class="demo-container">
-          <!-- Left side: Interactive Fast Logger Simulator -->
-          <div class="demo-controls-side">
+          <!-- Left side: Authentic Add Expense Modal Simulator -->
+          <div class="add-modal-sim">
+            <div class="modal-header-tag">
+              <span>Add Expense</span>
+              <span>Today</span>
+            </div>
+
+            <!-- Hero Amount Display -->
+            <div class="amount-hero-wrapper">
+              <div class="amount-hero-display tabular">
+                <span class="amount-hero-symbol">₹</span>
+                <span id="currentAmountStr">0</span>
+              </div>
+            </div>
+
+            <!-- Category Chips -->
             <div>
-              <div class="demo-heading-tag">Fast Log Simulator</div>
-              <div class="demo-title">Test the 3-second flow</div>
-            </div>
-
-            <p class="demo-desc">
-              Paisa auto-selects the category based on the clock so you don't waste time choosing tags while standing at the canteen counter.
-            </p>
-
-            <div class="input-wrapper">
-              <label class="input-label" for="expenseInput">Quick Preset or Custom Amount</label>
-              <div class="quick-chips-group">
-                <button class="quick-chip" onclick="setPreset(20, 'snacks', 'Chai')">₹20 Chai</button>
-                <button class="quick-chip" onclick="setPreset(40, 'breakfast', 'Poha')">₹40 Poha</button>
-                <button class="quick-chip" onclick="setPreset(120, 'lunch', 'Mess Thali')">₹120 Thali</button>
-                <button class="quick-chip" onclick="setPreset(35, 'misc', 'Xerox')">₹35 Xerox</button>
-              </div>
-
-              <div class="amount-input-box">
-                <span class="currency-symbol">₹</span>
-                <input
-                  type="number"
-                  id="expenseInput"
-                  class="amount-input tabular"
-                  placeholder="0"
-                  min="1"
-                  max="99999"
-                  value="40"
-                />
-              </div>
-            </div>
-
-            <div class="input-wrapper">
-              <label class="input-label">Category</label>
-              <div class="category-selector" id="catSelector">
+              <div class="category-chips-row" id="catSelector">
                 <button class="cat-chip" data-cat="breakfast" onclick="selectCat('breakfast')">Breakfast</button>
                 <button class="cat-chip" data-cat="lunch" onclick="selectCat('lunch')">Lunch</button>
                 <button class="cat-chip" data-cat="snacks" onclick="selectCat('snacks')">Snacks</button>
                 <button class="cat-chip" data-cat="dinner" onclick="selectCat('dinner')">Dinner</button>
                 <button class="cat-chip" data-cat="misc" onclick="selectCat('misc')">Misc</button>
               </div>
-              <div class="time-hint" id="timeHint">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <polyline points="12 6 12 12 16 14"></polyline>
-                </svg>
-                <span id="timeHintText">Auto-selected from your local time</span>
-              </div>
+              <div class="time-auto-note" id="timeAutoNote">Auto-selected from current time</div>
             </div>
 
-            <button class="log-btn" id="logBtn" onclick="submitExpense()">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              <span>Log Expense</span>
+            <!-- Numeric Keypad -->
+            <div class="keypad-grid">
+              <button class="keypad-btn" onclick="pressKey('1')">1</button>
+              <button class="keypad-btn" onclick="pressKey('2')">2</button>
+              <button class="keypad-btn" onclick="pressKey('3')">3</button>
+              <button class="keypad-btn" onclick="pressKey('4')">4</button>
+              <button class="keypad-btn" onclick="pressKey('5')">5</button>
+              <button class="keypad-btn" onclick="pressKey('6')">6</button>
+              <button class="keypad-btn" onclick="pressKey('7')">7</button>
+              <button class="keypad-btn" onclick="pressKey('8')">8</button>
+              <button class="keypad-btn" onclick="pressKey('9')">9</button>
+              <button class="keypad-btn" onclick="pressKey('.')">.</button>
+              <button class="keypad-btn" onclick="pressKey('0')">0</button>
+              <button class="keypad-btn" onclick="pressKey('backspace')" title="Backspace">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0 2-2z"></path>
+                  <line x1="18" y1="9" x2="12" y2="15"></line>
+                  <line x1="12" y1="9" x2="18" y2="15"></line>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Save Action Button -->
+            <button class="save-btn" id="saveExpenseBtn" disabled onclick="saveExpense()">
+              Save
             </button>
 
             <!-- Offline Mode Simulator Switch -->
             <div class="offline-toggle-row">
-              <span>Simulate Offline Mode</span>
+              <span>Offline queue simulation</span>
               <label class="switch-toggle">
                 <input type="checkbox" id="offlineToggle" onchange="toggleOfflineMode(this.checked)" />
                 <span class="slider"></span>
@@ -1333,7 +1272,7 @@
             <div class="feed-header">Today's Entries</div>
 
             <div class="expense-feed" id="expenseFeed">
-              <!-- Dynamically populated entries -->
+              <!-- Populated dynamically with Category, Time, and Amount only -->
             </div>
           </div>
         </div>
@@ -1458,41 +1397,6 @@
                 <span><strong>Open source & Sheets mirror.</strong> You own your database, with optional Google Sheets backup.</span>
               </li>
             </ul>
-          </div>
-        </div>
-      </section>
-
-      <!-- Student Life Scenarios -->
-      <section id="scenarios" class="section-wrap">
-        <div class="section-tag">Daily Utility</div>
-        <h2 class="section-title">Designed for campus realities</h2>
-        <p class="section-sub">
-          Small everyday expenses add up quickly in student hostels. Paisa keeps them visible without tedious paperwork.
-        </p>
-
-        <div class="scenarios-grid">
-          <div class="scenario-card">
-            <div class="scenario-timing">08:30 AM · BREAKFAST</div>
-            <div class="scenario-headline">Hostel Canteen Poha</div>
-            <p class="scenario-text">Open Paisa, tap 40, hit Save. Category is already set to Breakfast.</p>
-          </div>
-
-          <div class="scenario-card">
-            <div class="scenario-timing">01:15 PM · LUNCH</div>
-            <div class="scenario-headline">Mess Coupon / Extra Thali</div>
-            <p class="scenario-text">Log 120 in two seconds while walking back to lecture hall.</p>
-          </div>
-
-          <div class="scenario-card">
-            <div class="scenario-timing">05:40 PM · SNACKS</div>
-            <div class="scenario-headline">Evening Chai & Samosa</div>
-            <p class="scenario-text">Tap the quick chip for 20. Auto-categorized as Snacks right on cue.</p>
-          </div>
-
-          <div class="scenario-card">
-            <div class="scenario-timing">10:30 PM · MISC</div>
-            <div class="scenario-headline">Assignment Xerox & Printout</div>
-            <p class="scenario-text">Record 35 under Misc without needing to classify a dozen sub-tags.</p>
           </div>
         </div>
       </section>
@@ -1667,16 +1571,20 @@
       </div>
     </footer>
 
-    <div class="toast" id="toastNotification">Command copied to clipboard</div>
+    <div class="toast" id="toastNotification">Action complete</div>
 
     <script>
-      // State for the interactive demo
+      // State
       let isOffline = false;
       let activeCategory = 'snacks';
+      let currentInputVal = '0';
+      let previousTotal = 240;
+
+      // Realistic entries: Category, Time, and Amount only (no descriptions or notes)
       let expenses = [
-        { id: 1, title: 'Snacks', note: 'Chai & samosa', amount: 80, time: '5:30 PM', cat: 'snacks' },
-        { id: 2, title: 'Lunch', note: 'Canteen thali', amount: 120, time: '1:15 PM', cat: 'lunch' },
-        { id: 3, title: 'Breakfast', note: 'Poha & coffee', amount: 40, time: '8:45 AM', cat: 'breakfast' }
+        { id: 1, title: 'Snacks', cat: 'snacks', amount: 80, time: '5:30 PM' },
+        { id: 2, title: 'Lunch', cat: 'lunch', amount: 120, time: '1:15 PM' },
+        { id: 3, title: 'Breakfast', cat: 'breakfast', amount: 40, time: '8:45 AM' }
       ];
 
       // Auto category detection based on clock
@@ -1703,10 +1611,41 @@
         updateCategorySelectorUI();
       }
 
-      function setPreset(amt, cat, title) {
-        document.getElementById('expenseInput').value = amt;
-        activeCategory = cat;
-        updateCategorySelectorUI();
+      // Keypad interaction
+      function pressKey(key) {
+        if (key === 'backspace') {
+          if (currentInputVal.length <= 1) {
+            currentInputVal = '0';
+          } else {
+            currentInputVal = currentInputVal.slice(0, -1);
+          }
+        } else if (key === '.') {
+          if (!currentInputVal.includes('.')) {
+            currentInputVal += '.';
+          }
+        } else {
+          // digits 0-9
+          if (currentInputVal === '0') {
+            currentInputVal = key;
+          } else {
+            // max 7 digits
+            if (currentInputVal.replace('.', '').length < 7) {
+              // max 2 decimals
+              const parts = currentInputVal.split('.');
+              if (!parts[1] || parts[1].length < 2) {
+                currentInputVal += key;
+              }
+            }
+          }
+        }
+        updateAmountDisplay();
+      }
+
+      function updateAmountDisplay() {
+        document.getElementById('currentAmountStr').textContent = currentInputVal;
+        const amt = parseFloat(currentInputVal);
+        const saveBtn = document.getElementById('saveExpenseBtn');
+        saveBtn.disabled = !amt || amt <= 0;
       }
 
       function toggleOfflineMode(checked) {
@@ -1739,11 +1678,8 @@
         window.requestAnimationFrame(step);
       }
 
-      let previousTotal = 240;
-
-      function submitExpense() {
-        const input = document.getElementById('expenseInput');
-        const amt = parseFloat(input.value);
+      function saveExpense() {
+        const amt = parseFloat(currentInputVal);
         if (!amt || amt <= 0) return;
 
         const catName = activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1);
@@ -1753,22 +1689,22 @@
         const newEntry = {
           id: Date.now(),
           title: catName,
-          note: isOffline ? 'Queued locally' : 'Logged just now',
+          cat: activeCategory,
           amount: amt,
-          time: timeStr,
-          cat: activeCategory
+          time: timeStr
         };
 
         expenses.unshift(newEntry);
         renderExpenses(true);
 
-        input.value = '';
-        input.placeholder = '0';
+        // Reset input
+        currentInputVal = '0';
+        updateAmountDisplay();
 
         if (isOffline) {
-          showToast('Logged offline (will sync automatically on reconnect)');
+          showToast('Logged offline: stored in pending queue');
         } else {
-          showToast('Expense logged and synced');
+          showToast('Expense saved and synced');
         }
       }
 
@@ -1799,7 +1735,7 @@
               <div class="cat-avatar">${initial}</div>
               <div>
                 <div class="feed-title">${item.title}</div>
-                <div class="feed-meta">${item.time} · ${item.note}</div>
+                <div class="feed-meta">${item.time}</div>
               </div>
             </div>
             <div class="feed-right">
@@ -1828,7 +1764,7 @@
         document.getElementById('valLunch').textContent = '₹ ' + (catTotals.lunch || 0).toLocaleString('en-IN');
         document.getElementById('valSnacks').textContent = '₹ ' + (catTotals.snacks || 0).toLocaleString('en-IN');
 
-        // Dynamic baseline calculation
+        // Dynamic baseline comparison
         const baseline = 290;
         const delta = Math.round(((total - baseline) / baseline) * 100);
         const deltaEl = document.getElementById('deltaPill');
@@ -1850,7 +1786,7 @@
         toast.classList.add('visible');
         setTimeout(() => {
           toast.classList.remove('visible');
-        }, 2400);
+        }, 2200);
       }
 
       // Copy git clone command
@@ -1866,20 +1802,31 @@
         });
       });
 
+      // Keyboard support for typing digits directly
+      window.addEventListener('keydown', (e) => {
+        if ((e.key >= '0' && e.key <= '9') || e.key === '.') {
+          pressKey(e.key);
+        } else if (e.key === 'Backspace') {
+          pressKey('backspace');
+        } else if (e.key === 'Enter') {
+          const saveBtn = document.getElementById('saveExpenseBtn');
+          if (!saveBtn.disabled) {
+            saveExpense();
+          }
+        }
+      });
+
       // Init on load
       window.addEventListener('DOMContentLoaded', () => {
-        // Set date string
         const d = new Date();
         const options = { weekday: 'short', month: 'short', day: 'numeric' };
         document.getElementById('todayDateStr').textContent = d.toLocaleDateString('en-US', options).toUpperCase();
 
-        // Time based default
         activeCategory = getAutoCategory();
         const catName = activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1);
-        document.getElementById('timeHintText').textContent = `Auto-selected ${catName} based on your time (${d.getHours()}:00)`;
+        document.getElementById('timeAutoNote').textContent = `Auto-selected ${catName} from current hour (${d.getHours()}:00)`;
         updateCategorySelectorUI();
 
-        // Initial render
         renderExpenses(false);
       });
     </script>

@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+import Feather from '@expo/vector-icons/Feather';
 import * as Haptics from 'expo-haptics';
 import { addDays, format, parse } from 'date-fns';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -19,74 +19,20 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { categories, defaultCategoryForTime, type Category } from '@/src/lib/categories';
 import { sanitizeAmountInput } from '@/src/lib/amountInput';
 import { formatDateKey, todayDateKey } from '@/src/lib/dates';
-import { useExpensesStore } from '@/src/store/useExpenses';
+import { useExpensesStore, type Entry } from '@/src/store/useExpenses';
 import { requestSync } from '@/src/sync/queue';
 import { colors, radius, screenPadding, space } from '@/src/theme/tokens';
 import { useNetworkStatus } from '@/src/hooks/useNetworkStatus';
 
 export default function AddExpenseScreen() {
   const { editId } = useLocalSearchParams<{ editId?: string }>();
-  const insets = useSafeAreaInsets();
-  const { isOffline } = useNetworkStatus();
   const editEntry = useExpensesStore((state) => state.entries.find((entry) => entry.id === editId));
-  const [amountInput, setAmountInput] = useState(() => editEntry ? String(editEntry.amount) : '');
-  const [category, setCategory] = useState<Category>(() => editEntry?.category ?? defaultCategoryForTime(new Date()));
-  const [selectedDate, setSelectedDate] = useState<string | null>(() => editEntry && editEntry.date !== todayDateKey() ? editEntry.date : null);
-  const [noteVisible, setNoteVisible] = useState(() => Boolean(editEntry?.note));
-  const [note, setNote] = useState(() => editEntry?.note ?? '');
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const lastSaveAt = useRef(0);
-  const saving = useRef(false);
-  const addEntry = useExpensesStore((state) => state.addEntry);
-  const updateEntry = useExpensesStore((state) => state.updateEntry);
   const hasHydrated = useExpensesStore((state) => state.hasHydrated);
   const hydrationFailed = useExpensesStore((state) => state.hydrationFailed);
-  const amount = Number(amountInput);
-  const isValidAmount = Number.isFinite(amount) && amount > 0;
-  const displayDate = selectedDate ?? todayDateKey();
-
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      router.back();
-      return true;
-    });
-    return () => subscription.remove();
-  }, []);
 
   useEffect(() => {
     if (!hasHydrated && !hydrationFailed) void useExpensesStore.persist.rehydrate();
   }, [hasHydrated, hydrationFailed]);
-
-  const shiftDate = (days: number) => {
-    const target = formatDateKey(addDays(parse(displayDate, 'yyyy-MM-dd', new Date()), days));
-    setSelectedDate(target >= todayDateKey() ? null : target);
-  };
-
-  const saveExpense = () => {
-    const now = Date.now();
-    if (!isValidAmount || saving.current || now - lastSaveAt.current < 500) return;
-    lastSaveAt.current = now;
-    saving.current = true;
-    try {
-      const input = {
-        amount,
-        category,
-        date: selectedDate ?? todayDateKey(),
-        ...(note.trim() ? { note: note.trim() } : {}),
-      };
-      if (editEntry) updateEntry(editEntry.id, input);
-      else {
-        addEntry(input);
-      }
-      setSaveError(null);
-      void requestSync();
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      router.back();
-    } catch (error) {
-      saving.current = false;
-      setSaveError(error instanceof Error ? error.message : 'Could not save this expense. Try again.');
-    }
-  };
 
   if (!hasHydrated || hydrationFailed) {
     return (
@@ -116,6 +62,65 @@ export default function AddExpenseScreen() {
       </SafeAreaView>
     );
   }
+
+  return <AddExpenseForm key={editId ?? 'new'} editEntry={editEntry} />;
+}
+
+function AddExpenseForm({ editEntry }: { editEntry: Entry | undefined }) {
+  const insets = useSafeAreaInsets();
+  const { isOffline } = useNetworkStatus();
+  const [amountInput, setAmountInput] = useState(() => editEntry ? String(editEntry.amount) : '');
+  const [category, setCategory] = useState<Category>(() => editEntry?.category ?? defaultCategoryForTime(new Date()));
+  const [selectedDate, setSelectedDate] = useState<string | null>(() => editEntry && editEntry.date !== todayDateKey() ? editEntry.date : null);
+  const [noteVisible, setNoteVisible] = useState(() => Boolean(editEntry?.note));
+  const [note, setNote] = useState(() => editEntry?.note ?? '');
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const lastSaveAt = useRef(0);
+  const saving = useRef(false);
+  const addEntry = useExpensesStore((state) => state.addEntry);
+  const updateEntry = useExpensesStore((state) => state.updateEntry);
+  const amount = Number(amountInput);
+  const isValidAmount = Number.isFinite(amount) && amount > 0;
+  const displayDate = selectedDate ?? todayDateKey();
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      router.back();
+      return true;
+    });
+    return () => subscription.remove();
+  }, []);
+
+  const shiftDate = (days: number) => {
+    const target = formatDateKey(addDays(parse(displayDate, 'yyyy-MM-dd', new Date()), days));
+    setSelectedDate(target >= todayDateKey() ? null : target);
+  };
+
+  const saveExpense = () => {
+    const now = Date.now();
+    if (!isValidAmount || saving.current || now - lastSaveAt.current < 500) return;
+    lastSaveAt.current = now;
+    saving.current = true;
+    try {
+      const input = {
+        amount,
+        category,
+        date: selectedDate ?? todayDateKey(),
+        ...(note.trim() ? { note: note.trim() } : {}),
+      };
+      if (editEntry) updateEntry(editEntry.id, input);
+      else {
+        addEntry(input);
+      }
+      setSaveError(null);
+      void requestSync();
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+      router.back();
+    } catch (error) {
+      saving.current = false;
+      setSaveError(error instanceof Error ? error.message : 'Could not save this expense. Try again.');
+    }
+  };
 
   return (
     <KeyboardAvoidingView

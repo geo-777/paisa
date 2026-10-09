@@ -3,7 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { requestSync } from '@/src/sync/queue';
 import { persistStorage } from '@/src/lib/persistStorage';
-import { supabase } from '@/src/data/supabase';
+import { isSupabaseConfigured, supabase } from '@/src/data/supabase';
 import { useExpensesStore } from '@/src/store/useExpenses';
 import { clearCachedSheetsSettings, loadSheetsSettings } from '@/src/data/sheetsSettings';
 import { requestDailySheetsSync } from '@/src/data/sheetsScheduler';
@@ -39,33 +39,46 @@ export const useSessionStore = create<SessionState>()(persist((set) => ({
   errorMessage: null,
   bootstrapSession: async () => {
     set({ status: 'checking', errorMessage: null });
-    const { data, error } = await supabase.auth.getSession();
-    if (error) {
-      set({ status: 'signedOut', user: null, errorMessage: authMessage(error) });
+    if (!isSupabaseConfigured) {
+      useExpensesStore.getState().activateUser(null);
+      set({ status: 'signedOut', user: null, errorMessage: 'Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY for this build.' });
       return;
     }
-    const session = data.session;
-    useExpensesStore.getState().activateUser(session?.user.id ?? null);
-    set({ status: session ? 'signedIn' : 'signedOut', user: session?.user.email ? { id: session.user.id, email: session.user.email } : null });
-    if (session) {
-      void requestSync({ pull: true });
-      void loadSheetsSettings().then(() => requestDailySheetsSync()).catch(() => undefined);
-    }
-    supabase.auth.onAuthStateChange((event, nextSession) => {
-      if (!nextSession) clearCachedSheetsSettings();
-      useExpensesStore.getState().activateUser(nextSession?.user.id ?? null);
-      set({
-        status: nextSession ? 'signedIn' : 'signedOut',
-        user: nextSession?.user.email ? { id: nextSession.user.id, email: nextSession.user.email } : null,
-        isBusy: false,
-      });
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        setTimeout(() => { void requestSync({ pull: true }); }, 0);
-        if (event === 'SIGNED_IN') void loadSheetsSettings().then(() => requestDailySheetsSync()).catch(() => undefined);
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) throw error;
+      const session = data.session;
+      useExpensesStore.getState().activateUser(session?.user.id ?? null);
+      set({ status: session ? 'signedIn' : 'signedOut', user: session?.user.email ? { id: session.user.id, email: session.user.email } : null });
+      if (session) {
+        void requestSync({ pull: true });
+        void loadSheetsSettings().then(() => requestDailySheetsSync()).catch(() => undefined);
       }
-    });
+      supabase.auth.onAuthStateChange((event, nextSession) => {
+        if (!nextSession) clearCachedSheetsSettings();
+        useExpensesStore.getState().activateUser(nextSession?.user.id ?? null);
+        set({
+          status: nextSession ? 'signedIn' : 'signedOut',
+          user: nextSession?.user.email ? { id: nextSession.user.id, email: nextSession.user.email } : null,
+          isBusy: false,
+        });
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          setTimeout(() => {
+            void requestSync({ pull: true });
+            if (event === 'SIGNED_IN') void loadSheetsSettings().then(() => requestDailySheetsSync()).catch(() => undefined);
+          }, 0);
+        }
+      });
+    } catch (error) {
+      useExpensesStore.getState().activateUser(null);
+      set({ status: 'signedOut', user: null, errorMessage: authMessage(error) });
+    }
   },
   signIn: async (email, password, createAccount) => {
+    if (!isSupabaseConfigured) {
+      set({ isBusy: false, errorMessage: 'Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY for this build.' });
+      return false;
+    }
     set({ isBusy: true, errorMessage: null });
     try {
       const result = createAccount
@@ -89,11 +102,14 @@ export const useSessionStore = create<SessionState>()(persist((set) => ({
   },
   signOut: async () => {
     set({ isBusy: true, errorMessage: null });
-    const { error } = await supabase.auth.signOut();
-    if (!error) useExpensesStore.getState().activateUser(null);
-    set(error
-      ? { isBusy: false, errorMessage: authMessage(error) }
-      : { status: 'signedOut', isBusy: false, user: null });
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      useExpensesStore.getState().activateUser(null);
+      set({ status: 'signedOut', isBusy: false, user: null });
+    } catch (error) {
+      set({ isBusy: false, errorMessage: authMessage(error) });
+    }
   },
 }), {
   name: 'student-finance-session-v2',

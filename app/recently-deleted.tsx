@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+import Feather from '@expo/vector-icons/Feather';
 import { format, parse } from 'date-fns';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -37,7 +37,10 @@ export default function RecentlyDeletedScreen() {
     const [year = '2000', month = '01'] = candidateMonth.split('-');
     const date = new Date(Number(year), Number(month) - 1, 1);
     void loadDeletedMonth(date, date).then(() => {
-      if (active) setLoadedMonth(candidateMonth);
+      if (active) {
+        setLoadedMonth(candidateMonth);
+        setLoadError((current) => current?.month === candidateMonth ? null : current);
+      }
     }).catch((error: unknown) => {
       if (active) setLoadError({
         month: candidateMonth,
@@ -70,7 +73,7 @@ export default function RecentlyDeletedScreen() {
       {monthLoadError && !isOffline && (
         <View style={styles.errorBox}>
           <Text style={styles.errorText} accessibilityRole="alert">Could not load deleted expenses. {monthLoadError.message}</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Retry loading deleted expenses" onPress={() => setRetryKey((value) => value + 1)} style={styles.retryButton}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Retry loading deleted expenses" onPress={() => { setLoadError(null); setRetryKey((value) => value + 1); }} style={styles.retryButton}>
             <Text style={styles.retryText}>Retry</Text>
           </Pressable>
         </View>

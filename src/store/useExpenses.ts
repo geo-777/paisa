@@ -36,8 +36,8 @@ type ExpensesState = {
   restoreEntry: (id: string) => void;
   markEntrySynced: (entry: Entry) => void;
   markEntriesFailed: (ids: string[]) => void;
-  mergeRemoteEntries: (entries: Entry[]) => void;
-  mergeDeletedEntries: (entries: DeletedEntry[]) => void;
+  mergeRemoteEntries: (entries: Entry[], from: string, through: string) => void;
+  mergeDeletedEntries: (entries: DeletedEntry[], from: string, through: string) => void;
   clearDeletedId: (id: string) => void;
   setSyncStatus: (status: ExpensesState['syncStatus'], error?: string | null) => void;
   retryFailed: () => void;
@@ -74,6 +74,7 @@ export const useExpensesStore = create<ExpensesState>()(
       })),
       activateUser: (userId) => set((state) => {
         const accounts = { ...state.accounts };
+        const accountChanged = state.activeUserId !== userId;
         if (state.activeUserId) {
           accounts[state.activeUserId] = {
             entries: state.entries,
@@ -88,6 +89,7 @@ export const useExpensesStore = create<ExpensesState>()(
           entries: account?.entries ?? [],
           deletedEntries: account?.deletedEntries ?? [],
           deletedIds: account?.deletedIds ?? [],
+          ...(accountChanged ? { syncStatus: 'synced' as const, syncError: null } : {}),
         };
       }),
       deleteEntry: (id) => set((state) => {
@@ -132,9 +134,11 @@ export const useExpensesStore = create<ExpensesState>()(
       markEntriesFailed: (ids) => set((state) => ({
         entries: state.entries.map((entry) => ids.includes(entry.id) ? { ...entry, status: 'failed' } : entry),
       })),
-      mergeRemoteEntries: (remoteEntries) => set((state) => {
+      mergeRemoteEntries: (remoteEntries, from, through) => set((state) => {
         const hiddenIds = new Set(state.deletedIds);
-        const localById = new Map(state.entries.map((entry) => [entry.id, entry]));
+        const localById = new Map(state.entries
+          .filter((entry) => entry.status !== 'synced' || entry.date < from || entry.date > through)
+          .map((entry) => [entry.id, entry]));
         for (const remote of remoteEntries) {
           if (hiddenIds.has(remote.id)) continue;
           const local = localById.get(remote.id);
@@ -143,9 +147,14 @@ export const useExpensesStore = create<ExpensesState>()(
         }
         return { entries: [...localById.values()] };
       }),
-      mergeDeletedEntries: (remoteEntries) => set((state) => {
-        const localById = new Map(state.deletedEntries.map((entry) => [entry.id, entry]));
+      mergeDeletedEntries: (remoteEntries, from, through) => set((state) => {
         const pendingDeleteIds = new Set(state.deletedIds);
+        const localById = new Map(state.deletedEntries
+          .filter((entry) => entry.status !== 'synced'
+            || pendingDeleteIds.has(entry.id)
+            || entry.date < from
+            || entry.date > through)
+          .map((entry) => [entry.id, entry]));
         for (const remote of remoteEntries) {
           if (!pendingDeleteIds.has(remote.id)) localById.set(remote.id, remote);
         }

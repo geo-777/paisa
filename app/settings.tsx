@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import Feather from "@expo/vector-icons/Feather";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -100,7 +100,9 @@ export default function SettingsScreen() {
               : "Could not load Sheets settings. Check that the database schema is installed.",
           );
       });
-    void refreshSheetsSyncStatus();
+    void refreshSheetsSyncStatus().catch((error: unknown) => {
+      if (live) setLinkProblem(error instanceof Error ? error.message : 'Could not load Sheets sync status.');
+    });
     const unsubscribeStatus = subscribeSheetsSyncStatus((next) => {
       setSyncStatus(next);
       if (!next.error && !next.syncing) setLinkProblem(null);

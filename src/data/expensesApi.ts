@@ -25,9 +25,10 @@ function toEntry(row: ExpenseRow): Entry {
   };
 }
 
-export async function upsertExpense(entry: Entry): Promise<void> {
+export async function upsertExpense(entry: Entry, userId: string): Promise<void> {
   const { error } = await supabase.from('expenses').upsert({
     id: entry.id,
+    user_id: userId,
     date: entry.date,
     category: entry.category.toLowerCase(),
     amount: entry.amount,
@@ -38,10 +39,11 @@ export async function upsertExpense(entry: Entry): Promise<void> {
   if (error) throw error;
 }
 
-export async function softDeleteExpense(id: string, deletedAt: string): Promise<void> {
+export async function softDeleteExpense(id: string, deletedAt: string, userId: string): Promise<void> {
   const { error } = await supabase.from('expenses')
     .update({ deleted_at: deletedAt })
-    .eq('id', id);
+    .eq('id', id)
+    .eq('user_id', userId);
   if (error) throw error;
 }
 

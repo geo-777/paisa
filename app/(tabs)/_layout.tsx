@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+import Feather from '@expo/vector-icons/Feather';
 import { Tabs } from 'expo-router';
 import { useMemo } from 'react';
 import { useWindowDimensions, type ColorValue } from 'react-native';

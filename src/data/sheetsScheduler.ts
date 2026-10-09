@@ -130,12 +130,12 @@ export function requestDailySheetsSync(): Promise<void> {
 
 export function startSheetsScheduler(): () => void {
   void AsyncStorage.removeItem(LEGACY_OUTBOX_KEY).catch(() => undefined);
-  const schedule = () => { void requestDailySheetsSync(); };
+  const schedule = () => { void requestDailySheetsSync().catch(() => undefined); };
   schedule();
   const appState = AppState.addEventListener('change', (state) => { if (state === 'active') schedule(); });
   const net = NetInfo.addEventListener((state) => { if (state.isConnected && state.isInternetReachable !== false) schedule(); });
   const { data } = supabase.auth.onAuthStateChange((event, session) => {
-    if (session && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) schedule();
+    if (session && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) setTimeout(schedule, 0);
     else if (!session) publish({ syncing: false, lastSyncDate: null, lastSyncAt: null, error: null });
   });
   return () => { appState.remove(); net(); data.subscription.unsubscribe(); };

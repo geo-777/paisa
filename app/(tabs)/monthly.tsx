@@ -103,7 +103,10 @@ export default function MonthlyScreen() {
     }
     const date = monthDate(displayedMonth);
     void loadMonth(date, date).then(() => {
-      if (active) setLoadedMonth(displayedMonth);
+      if (active) {
+        setLoadedMonth(displayedMonth);
+        setLoadError((current) => current?.month === displayedMonth ? null : current);
+      }
     }).catch((error: unknown) => {
       if (active) setLoadError({
         month: displayedMonth,
@@ -203,7 +206,7 @@ export default function MonthlyScreen() {
         {monthLoadError && !isOffline && (
           <View style={styles.errorRow}>
             <Text style={styles.errorText} accessibilityRole="alert">Could not refresh this month. {monthLoadError.message}</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="Retry loading month" onPress={() => setRetryKey((value) => value + 1)} style={styles.retryButton}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Retry loading month" onPress={() => { setLoadError(null); setRetryKey((value) => value + 1); }} style={styles.retryButton}>
               <Text style={styles.retryText}>Retry</Text>
             </Pressable>
           </View>

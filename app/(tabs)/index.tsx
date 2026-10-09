@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+import Feather from '@expo/vector-icons/Feather';
 import * as Haptics from 'expo-haptics';
 import { addDays, format, parse, startOfDay } from 'date-fns';
 import { Link, useFocusEffect, type Href } from 'expo-router';
@@ -61,7 +61,7 @@ export default function HomeScreen() {
 
   const renderEntry = ({ item }: { item: Entry }) => (
     <EntryRow entry={item} onDelete={() => {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
       deleteEntry(item.id);
       void requestSync();
     }} />

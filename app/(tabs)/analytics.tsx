@@ -28,6 +28,9 @@ export default function AnalyticsScreen() {
   const [todayKey, setTodayKey] = useState(formatDateKey(new Date()));
   const todayRef = useRef(todayKey);
   const [selectedMonth, setSelectedMonth] = useState(todayKey.slice(0, 7));
+  const [loadedMonth, setLoadedMonth] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<{ month: string; message: string } | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
   const { isOffline } = useNetworkStatus();
   const entries = useExpensesStore((state) => state.entries);
   const hasHydrated = useExpensesStore((state) => state.hasHydrated);
@@ -51,6 +54,8 @@ export default function AnalyticsScreen() {
   const highDay = highestDay(entries, displayedMonth, elapsedDays);
   const lowDay = lowestDay(entries, displayedMonth, elapsedDays);
   const hasMonthEntries = total > 0;
+  const monthLoadError = loadError?.month === displayedMonth ? loadError : null;
+  const refreshingMonth = !isOffline && loadedMonth !== displayedMonth && monthLoadError === null;
   const canGoPrevious = displayedMonth > firstMonth;
   const canGoNext = displayedMonth < currentMonth;
 
@@ -88,12 +93,22 @@ export default function AnalyticsScreen() {
   useFocusEffect(useCallback(() => { updateToday(); }, [updateToday]));
 
   useEffect(() => {
-    if (isOffline) return;
-    const selectedDate = monthDate(selectedMonth);
-    void loadMonth(subMonths(selectedDate, 1), selectedDate).catch((error: unknown) => {
-      useExpensesStore.getState().setSyncStatus('failed', error instanceof Error ? error.message : 'Could not load this month.');
+    let active = true;
+    if (!hasHydrated || hydrationFailed || isOffline) return () => { active = false; };
+    const selectedDate = monthDate(displayedMonth);
+    void loadMonth(subMonths(selectedDate, 1), selectedDate).then(() => {
+      if (active) {
+        setLoadedMonth(displayedMonth);
+        setLoadError((current) => current?.month === displayedMonth ? null : current);
+      }
+    }).catch((error: unknown) => {
+      if (active) setLoadError({
+        month: displayedMonth,
+        message: error instanceof Error ? error.message : 'Could not load this month.',
+      });
     });
-  }, [isOffline, selectedMonth]);
+    return () => { active = false; };
+  }, [displayedMonth, hasHydrated, hydrationFailed, isOffline, retryKey]);
 
   if (!hasHydrated) {
     return (
@@ -165,6 +180,16 @@ export default function AnalyticsScreen() {
           </Pressable>
         </View>
 
+        {monthLoadError && !isOffline && (
+          <View style={styles.loadErrorBox}>
+            <Text style={styles.loadErrorText} accessibilityRole="alert">Could not refresh this month. {monthLoadError.message}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Retry loading analytics month" onPress={() => { setLoadError(null); setRetryKey((value) => value + 1); }} style={styles.retryButton}>
+              <Text style={styles.retryLabel}>Retry</Text>
+            </Pressable>
+          </View>
+        )}
+        {refreshingMonth && !hasMonthEntries && <Text style={styles.loadingHint}>Loading this month…</Text>}
+
         <View style={styles.summary}>
           <Text style={styles.eyebrow}>MONTH TOTAL</Text>
           <Text style={styles.heroAmount} numberOfLines={1} adjustsFontSizeToFit>{formatINR(total)}</Text>
@@ -187,7 +212,7 @@ export default function AnalyticsScreen() {
           />
         </View>
 
-        {!hasMonthEntries && <Text style={styles.emptyText}>No spending recorded for this month.</Text>}
+        {!hasMonthEntries && !refreshingMonth && !monthLoadError && <Text style={styles.emptyText}>No spending recorded for this month.</Text>}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Category totals</Text>
@@ -250,6 +275,9 @@ const styles = StyleSheet.create({
   sectionCaption: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 11, marginTop: -space.sm },
   sectionEmpty: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 13 },
   errorState: { flex: 1, padding: screenPadding, justifyContent: 'center', gap: space.md },
+  loadErrorBox: { padding: space.md, gap: space.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surface },
+  loadErrorText: { color: colors.up, fontFamily: 'Inter_400Regular', fontSize: 13 },
+  loadingHint: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 13, paddingVertical: space.sm },
   body: { color: colors.textMuted, fontFamily: 'Inter_400Regular', fontSize: 15 },
   retryButton: { minHeight: 48, borderRadius: radius.pill, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', paddingHorizontal: space.lg, alignSelf: 'flex-start' },
   retryLabel: { color: colors.onPrimary, fontFamily: 'Inter_600SemiBold', fontSize: 14 },

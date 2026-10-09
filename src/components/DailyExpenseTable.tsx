@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+import Feather from '@expo/vector-icons/Feather';
 import { format, parse } from 'date-fns';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';

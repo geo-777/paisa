@@ -10,6 +10,26 @@ let activeFlush: Promise<void> | null = null;
 let syncAgain = false;
 let pullAgain = false;
 
+async function waitForExpenseHydration(): Promise<void> {
+  const store = useExpensesStore.getState();
+  if (!store.hasHydrated) {
+    await new Promise<void>((resolve) => {
+      let unsubscribe: () => void = () => {};
+      unsubscribe = useExpensesStore.persist.onFinishHydration(() => {
+        unsubscribe();
+        resolve();
+      });
+      if (useExpensesStore.getState().hasHydrated) {
+        unsubscribe();
+        resolve();
+      }
+    });
+  }
+  if (useExpensesStore.getState().hydrationFailed) {
+    throw new Error('Local expenses could not be loaded. Retry loading before syncing.');
+  }
+}
+
 export function requestSync(options: { pull?: boolean } = {}): Promise<void> {
   if (activeFlush) {
     syncAgain = true;
@@ -30,36 +50,44 @@ export function requestSync(options: { pull?: boolean } = {}): Promise<void> {
 }
 
 async function flush(pull: boolean): Promise<void> {
-  const { data: authData } = await supabase.auth.getSession();
-  if (!authData.session) return;
-  const network = await NetInfo.fetch();
-  if (!network.isConnected || network.isInternetReachable === false) {
-    useExpensesStore.getState().setSyncStatus('offline');
-    return;
-  }
-
-  const store = useExpensesStore.getState();
-  store.setSyncStatus('syncing');
+  let flushUserId: string | null = null;
   try {
+    await waitForExpenseHydration();
+    const { data: authData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!authData.session) return;
+    const userId = authData.session.user.id;
+    flushUserId = userId;
+    if (useExpensesStore.getState().activeUserId !== userId) return;
+    const network = await NetInfo.fetch();
+    if (!network.isConnected || network.isInternetReachable === false) {
+      useExpensesStore.getState().setSyncStatus('offline');
+      return;
+    }
+
+    useExpensesStore.getState().setSyncStatus('syncing');
+    const store = useExpensesStore.getState();
     for (const id of store.deletedIds) {
       const deleted = useExpensesStore.getState().deletedEntries.find((entry) => entry.id === id);
-      await softDeleteExpense(id, deleted?.deletedAt ?? new Date().toISOString());
+      await softDeleteExpense(id, deleted?.deletedAt ?? new Date().toISOString(), userId);
       useExpensesStore.getState().clearDeletedId(id);
     }
     const pending = useExpensesStore.getState().entries.filter((entry) => entry.status !== 'synced');
     for (const entry of pending) {
-      await upsertExpense(entry);
+      await upsertExpense(entry, userId);
       useExpensesStore.getState().markEntrySynced(entry);
     }
     if (pull) {
       const today = new Date();
       const from = format(startOfMonth(subMonths(today, 1)), 'yyyy-MM-dd');
       const through = format(today, 'yyyy-MM-dd');
-      useExpensesStore.getState().mergeRemoteEntries(await fetchExpenses(from, through));
+      useExpensesStore.getState().mergeRemoteEntries(await fetchExpenses(from, through), from, through);
     }
     useExpensesStore.getState().setSyncStatus('synced');
   } catch (error) {
-    const stillPending = useExpensesStore.getState().entries
+    const current = useExpensesStore.getState();
+    if (flushUserId && current.activeUserId !== flushUserId) return;
+    const stillPending = current.entries
       .filter((entry) => entry.status !== 'synced')
       .map((entry) => entry.id);
     useExpensesStore.getState().markEntriesFailed(stillPending);
@@ -78,11 +106,17 @@ export function startSyncListeners(): () => void {
 }
 
 export async function loadMonth(fromDate: Date, toDate: Date): Promise<void> {
-  const entries = await fetchExpenses(format(startOfMonth(fromDate), 'yyyy-MM-dd'), format(endOfMonth(toDate), 'yyyy-MM-dd'));
-  useExpensesStore.getState().mergeRemoteEntries(entries);
+  await waitForExpenseHydration();
+  const from = format(startOfMonth(fromDate), 'yyyy-MM-dd');
+  const through = format(endOfMonth(toDate), 'yyyy-MM-dd');
+  const entries = await fetchExpenses(from, through);
+  useExpensesStore.getState().mergeRemoteEntries(entries, from, through);
 }
 
 export async function loadDeletedMonth(fromDate: Date, toDate: Date): Promise<void> {
-  const entries = await fetchDeletedExpenses(format(startOfMonth(fromDate), 'yyyy-MM-dd'), format(endOfMonth(toDate), 'yyyy-MM-dd'));
-  useExpensesStore.getState().mergeDeletedEntries(entries);
+  await waitForExpenseHydration();
+  const from = format(startOfMonth(fromDate), 'yyyy-MM-dd');
+  const through = format(endOfMonth(toDate), 'yyyy-MM-dd');
+  const entries = await fetchDeletedExpenses(from, through);
+  useExpensesStore.getState().mergeDeletedEntries(entries, from, through);
 }
