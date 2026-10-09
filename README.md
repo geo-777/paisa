@@ -69,6 +69,14 @@ eas build --platform android --profile preview
 
 The build link from EAS can install the APK directly on a device or emulator. The profile configuration is in [`eas.json`](eas.json).
 
+## Publish APKs with GitHub releases
+
+The workflow in [`.github/workflows/release-apk.yml`](.github/workflows/release-apk.yml) builds a preview APK when a GitHub release is published and attaches it to that release. Before using it:
+
+1. Add an Expo access token as the `EXPO_TOKEN` Actions secret in the GitHub repository settings.
+2. Make sure `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` are set in the EAS `preview` environment. The workflow's cloud build reads variables from EAS, not a GitHub Actions `.env` file.
+3. Create a GitHub release from the tag/commit you want to share and publish it. The APK appears as a downloadable release asset after the workflow finishes.
+
 ## Google Sheets setup
 
 See [`docs/sheets-mirror/README.md`](docs/sheets-mirror/README.md). The Apps Script source is [`scripts/code.gs`](scripts/code.gs). Store its shared token in Apps Script Script Properties, not in the source file. The sheet is overwritten on sync and should not be edited manually.

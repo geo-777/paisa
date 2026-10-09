@@ -1,0 +1,44 @@
+name: Build APK for GitHub release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-attach-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Expo and EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Android APK with EAS
+        run: eas build --platform android --profile preview --wait --non-interactive --json > eas-build.json
+
+      - name: Download APK artifact
+        run: |
+          APK_URL="$(jq -r 'if type == "array" then .[0].artifacts.buildUrl else .artifacts.buildUrl end' eas-build.json)"
+          test -n "$APK_URL" && test "$APK_URL" != "null"
+          curl --fail --location "$APK_URL" --output Paisa-${GITHUB_REF_NAME}.apk
+
+      - name: Attach APK to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" "Paisa-${GITHUB_REF_NAME}.apk" --clobber
